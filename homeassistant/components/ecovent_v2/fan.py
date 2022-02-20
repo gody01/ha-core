@@ -58,7 +58,7 @@ class VentoExpertFan(FanEntity):
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._fan.name,
+            "name": self._fan.name + "_fan",
             "model": self._fan.unit_type,
             "sw_version": self._fan.firmware,
             "manufacturer": "Balauberg",
