@@ -47,11 +47,10 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from . import GroupEntity
 from .util import (
     attribute_equal,
+    find_state_attributes,
     most_frequent_attribute,
     reduce_attribute,
     states_equal,
-    find_state_attributes,
-    mean_tuple,
 )
 
 SUPPORTED_FLAGS = {
@@ -194,7 +193,7 @@ class FanGroup(GroupEntity, FanEntity):
 
         await super().async_added_to_hass()
 
-    async def async_set_preset_mode(self, preset_mode: int) -> None:
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode of the fan."""
         await self._async_call_supported_entities(
             SERVICE_SET_PRESET_MODE,
