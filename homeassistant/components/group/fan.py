@@ -304,19 +304,25 @@ class FanGroup(GroupEntity, FanEntity):
         self._set_attr_most_frequent(
             "_oscillating", SUPPORT_OSCILLATE, ATTR_OSCILLATING
         )
-        self._set_attr_most_frequent("_direction", SUPPORT_DIRECTION, ATTR_DIRECTION)
 
-        self._set_attr_most_frequent(
-            "_preset_mode", SUPPORT_PRESET_MODE, ATTR_PRESET_MODE
-        )
+        self._set_attr_most_frequent("_direction", SUPPORT_DIRECTION, ATTR_DIRECTION)
 
         all_supported_preset_modes = list(
             find_state_attributes(on_states, ATTR_PRESET_MODES)
         )
-        if attribute_equal(on_states, ATTR_PRESET_MODES):
+
+        if all_supported_preset_modes and attribute_equal(on_states, ATTR_PRESET_MODES):
             self._preset_modes = all_supported_preset_modes[0]
         else:
             self._preset_modes = None
+
+        if attribute_equal(on_states, ATTR_PRESET_MODE):
+            self._set_attr_most_frequent(
+                "_preset_mode", SUPPORT_PRESET_MODE, ATTR_PRESET_MODE
+            )
+        else:
+            self._attr_assumed_state = True
+            self._preset_mode = None
 
         self._supported_features = reduce(
             ior, [feature for feature in SUPPORTED_FLAGS if self._fans[feature]], 0
