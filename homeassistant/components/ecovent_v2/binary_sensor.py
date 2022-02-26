@@ -41,26 +41,16 @@ async def async_setup_platform(
                 True,
                 None,
             ),
-        ],
-    ),
-    """
-
-            VentoBinarySensor(
-                hass, config, "_relay_sensor_state", "relay_sensor_state", True, None
-            ),
-            VentoBinarySensor(
-                hass, config, "_battery_voltage", "battery_voltage", True, None
-            ),
-            VentoBinarySensor(
-                hass, config, "_relay_status", "relay_status", True, None
-            ),
             VentoBinarySensor(
                 hass,
                 config,
-                "_humidity_senzor_state",
-                "humidity_sensor_state",
+                "_relay_sensor_state",
+                "relay_sensor_state",
                 True,
                 None,
+            ),
+            VentoBinarySensor(
+                hass, config, "_relay_status", "relay_status", True, None
             ),
             VentoBinarySensor(
                 hass,
@@ -71,13 +61,15 @@ async def async_setup_platform(
                 None,
             ),
             VentoBinarySensor(
-                hass, config, "_relay_status", "relay_status", True, None
-            ),
-            VentoBinarySensor(
                 hass, config, "_alarm_status", "alarm_status", True, None
             ),
             VentoBinarySensor(
-                hass, config, "_cloud_server_state", "cloud_server_state", True, None
+                hass,
+                config,
+                "_cloud_server_state",
+                "cloud_server_state",
+                True,
+                None,
             ),
             VentoBinarySensor(
                 hass, config, "_humidity_status", "humidity_status", True, None
@@ -85,7 +77,8 @@ async def async_setup_platform(
             VentoBinarySensor(
                 hass, config, "_analogV_status", "analogV_status", True, None
             ),
-    """
+        ],
+    ),
 
 
 async def async_setup_entry(
@@ -149,9 +142,6 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
     def relay_sensor_state(self):
         return self._fan.relay_sensor_state
-
-    def battery_voltage(self):
-        return self._fan.battery_voltage
 
     def humidity_treshold(self):
         return self._fan.humidity_treshold
