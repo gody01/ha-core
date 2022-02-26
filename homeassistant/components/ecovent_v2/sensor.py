@@ -54,7 +54,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                False,
+                True,
                 "mdi:fan-speed-1",
             ),
             VentoSensor(
@@ -66,7 +66,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                False,
+                True,
                 "mdi:fan-speed-2",
             ),
             VentoSensor(
@@ -89,7 +89,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                False,
+                True,
             ),
             VentoSensor(
                 hass,
@@ -100,7 +100,7 @@ async def async_setup_platform(
                 SensorDeviceClass.BATTERY,
                 SensorStateClass.MEASUREMENT,
                 EntityCategory.DIAGNOSTIC,
-                False,
+                True,
                 "mdi:battery",
             ),
             VentoSensor(
@@ -112,7 +112,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.CONFIG,
-                False,
+                True,
                 "mdi:water-percent-alert",
             ),
             VentoSensor(
@@ -154,18 +154,6 @@ async def async_setup_platform(
             VentoSensor(
                 hass,
                 config,
-                "_machine_hours",
-                "machine_hours",
-                None,
-                None,
-                None,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:timer-outline",
-            ),
-            VentoSensor(
-                hass,
-                config,
                 "_analogV_treshold",
                 "analogV_treshold",
                 None,
@@ -175,8 +163,21 @@ async def async_setup_platform(
                 True,
                 "mdi:flash-alert",
             ),
+            VentoSensor(
+                hass,
+                config,
+                "_machine_hours",
+                "machine_hours",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                True,
+                "mdi:timer-outline",
+            ),
         ],
     )
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -199,7 +200,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         state_class=None,
         entity_category=EntityCategory.SYSTEM,
         enable_by_default=True,
-        icon = None,
+        icon=None,
     ) -> None:
         coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
@@ -264,5 +265,4 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._attr_name,
         }
