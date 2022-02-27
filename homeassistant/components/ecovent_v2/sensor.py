@@ -2,6 +2,8 @@
 from __future__ import annotations
 from xml.sax.handler import property_encoding
 
+from numpy import False_
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -66,7 +68,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                True,
+                False,
                 "mdi:fan-speed-2",
             ),
             VentoSensor(
@@ -89,7 +91,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                True,
+                False,
             ),
             VentoSensor(
                 hass,
@@ -136,7 +138,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.CONFIG,
-                True,
+                False,
                 "mdi:timer-outline",
             ),
             VentoSensor(
@@ -148,7 +150,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                True,
+                False,
                 "mdi:flash",
             ),
             VentoSensor(
@@ -160,7 +162,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.CONFIG,
-                True,
+                False,
                 "mdi:flash-alert",
             ),
             VentoSensor(
@@ -172,7 +174,7 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                True,
+                False,
                 "mdi:timer-outline",
             ),
         ],
@@ -198,7 +200,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         native_unit_of_measurement=None,
         device_class=None,
         state_class=None,
-        entity_category=EntityCategory.SYSTEM,
+        entity_category=None,
         enable_by_default=True,
         icon=None,
     ) -> None:
@@ -237,7 +239,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         return self._fan.airflow
 
     def battery_voltage(self):
-        voltage = int(self._fan.battery_voltage.split()[0]) / 1000
+        high = 3300
+        low = 2500
+        voltage = int(self._fan.battery_voltage.split()[0])
+        voltage = round(((voltage - low) / (high - low)) * 100)
         return voltage
 
     def timer_counter(self):

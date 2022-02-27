@@ -30,15 +30,15 @@ async def async_setup_platform(
     async_add_entities(
         [
             VentoBinarySensor(
-                hass, config, "_boost_status", "boost_status", True, None
+                hass, config, "_boost_status", "boost_status", False, None
             ),
-            VentoBinarySensor(hass, config, "_timer_mode", "timer_mode", True, None),
+            VentoBinarySensor(hass, config, "_timer_mode", "timer_mode", False, None),
             VentoBinarySensor(
                 hass,
                 config,
                 "_humidity_sensor_state",
                 "humidity_sensor_state",
-                True,
+                False,
                 None,
             ),
             VentoBinarySensor(
@@ -46,11 +46,11 @@ async def async_setup_platform(
                 config,
                 "_relay_sensor_state",
                 "relay_sensor_state",
-                True,
+                False,
                 None,
             ),
             VentoBinarySensor(
-                hass, config, "_relay_status", "relay_status", True, None
+                hass, config, "_relay_status", "relay_status", False, None
             ),
             VentoBinarySensor(
                 hass,
@@ -68,14 +68,14 @@ async def async_setup_platform(
                 config,
                 "_cloud_server_state",
                 "cloud_server_state",
-                True,
+                False,
                 None,
             ),
             VentoBinarySensor(
-                hass, config, "_humidity_status", "humidity_status", True, None
+                hass, config, "_humidity_status", "humidity_status", False, None
             ),
             VentoBinarySensor(
-                hass, config, "_analogV_status", "analogV_status", True, None
+                hass, config, "_analogV_status", "analogV_status", False, None
             ),
         ],
     ),
@@ -122,15 +122,6 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
         """No polling needed for a demo binary sensor."""
         return True
 
-    @property
-    def device_class(self) -> BinarySensorDeviceClass:
-        """Return the class of this sensor."""
-        return self._sensor_type
-
-    @property
-    def unique_id(self) -> str | None:
-        return self._attr_unique_id
-
     def boost_status(self):
         return self._fan.boost_status
 
@@ -168,5 +159,5 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, self._fan.id)},
-            #        "name": self._attr_name,
+            "name": self._attr_name,
         }
