@@ -106,6 +106,9 @@ aio_geojson_nsw_rfs_incidents==0.4
 # homeassistant.components.gdacs
 aio_georss_gdacs==0.5
 
+# homeassistant.components.airzone
+aioairzone==0.0.2
+
 # homeassistant.components.ambient_station
 aioambient==2021.11.0
 
@@ -2506,4 +2509,4 @@ zm-py==0.5.2
 zwave-js-server-python==0.35.2
 
 # homeassistant.components.zwave_me
-zwave_me_ws==0.2.1
+zwave_me_ws==0.2.2
