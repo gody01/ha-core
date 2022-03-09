@@ -129,6 +129,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     else:
                         user_input[CONF_IP_ADDRESS] = ip
                         break
+                if user_input[CONF_IP_ADDRESS] == "<broadcast>":
+                    raise CannotConnect
 
             info = await validate_input(self.hass, user_input)
             await self.async_set_unique_id(info["id"])

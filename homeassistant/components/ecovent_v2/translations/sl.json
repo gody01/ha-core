@@ -4,7 +4,7 @@
             "already_configured": "Ventilator je že konfiguriran"
         },
         "error": {
-            "cannot_connect": "Povezaba ni uspela",
+            "cannot_connect": "Povezava ni uspela",
             "invalid_auth": "Neuspešna priajava/napačno geslo",
             "unknown": "Nepričakovana napaka"
         },
