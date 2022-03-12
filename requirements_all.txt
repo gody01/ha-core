@@ -1301,7 +1301,7 @@ pyCEC==0.5.1
 pyControl4==0.0.6
 
 # homeassistant.components.ecovent_v2
-pyEcoventV2==0.9.2
+pyEcoventV2==0.9.10
 
 # homeassistant.components.met_eireann
 pyMetEireann==2021.8.0
