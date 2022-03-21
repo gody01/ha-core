@@ -79,7 +79,7 @@ class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=60),
+            update_interval=timedelta(seconds=5),
             update_method=self._fan.update(),
         )
 
