@@ -1,6 +1,7 @@
 """Support for Blauberg Vento Expert Fans with api v.2."""
 
 from __future__ import annotations
+from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
@@ -147,14 +148,14 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     # pylint: disable=arguments-differ
     async def async_turn_on(
         self,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
         self._fan.set_param("state", "on")
         await self.coordinator.async_refresh()
         # self.schedule_update_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
         self._fan.set_param("state", "off")
         await self.coordinator.async_refresh()
