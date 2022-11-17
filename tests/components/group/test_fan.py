@@ -27,10 +27,7 @@ from homeassistant.components.fan import (
     SERVICE_SET_PRESET_MODE,
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
-    SUPPORT_DIRECTION,
-    SUPPORT_OSCILLATE,
-    SUPPORT_PRESET_MODE,
-    SUPPORT_SET_SPEED,
+    FanEntityFeature,
 )
 from homeassistant.components.group import SERVICE_RELOAD
 from homeassistant.components.group.fan import DEFAULT_NAME
@@ -66,7 +63,7 @@ FULL_FAN_ENTITY_IDS = [LIVING_ROOM_FAN_ENTITY_ID, PERCENTAGE_FULL_FAN_ENTITY_ID]
 LIMITED_FAN_ENTITY_IDS = [CEILING_FAN_ENTITY_ID, PERCENTAGE_LIMITED_FAN_ENTITY_ID]
 
 FULL_SUPPORT_FEATURES = (
-    SUPPORT_SET_SPEED | SUPPORT_DIRECTION | SUPPORT_OSCILLATE | SUPPORT_PRESET_MODE
+    FanEntityFeature.SET_SPEED | FanEntityFeature.DIRECTION | FanEntityFeature.OSCILLATE
 )
 
 CONFIG_MISSING_FAN = {
@@ -245,7 +242,7 @@ async def test_attributes(hass, setup_comp):
         CEILING_FAN_ENTITY_ID,
         STATE_ON,
         {
-            ATTR_SUPPORTED_FEATURES: SUPPORT_SET_SPEED,
+            ATTR_SUPPORTED_FEATURES: FanEntityFeature.SET_SPEED,
             ATTR_PERCENTAGE: 50,
         },
     )
@@ -254,7 +251,7 @@ async def test_attributes(hass, setup_comp):
     state = hass.states.get(FAN_GROUP)
     assert state.state == STATE_ON
     assert ATTR_ASSUMED_STATE not in state.attributes
-    assert state.attributes[ATTR_SUPPORTED_FEATURES] == SUPPORT_SET_SPEED
+    assert state.attributes[ATTR_SUPPORTED_FEATURES] == FanEntityFeature.SET_SPEED
     assert ATTR_PERCENTAGE in state.attributes
     assert state.attributes[ATTR_PERCENTAGE] == 50
     assert ATTR_ASSUMED_STATE not in state.attributes
@@ -268,7 +265,7 @@ async def test_attributes(hass, setup_comp):
         PERCENTAGE_LIMITED_FAN_ENTITY_ID,
         STATE_ON,
         {
-            ATTR_SUPPORTED_FEATURES: SUPPORT_SET_SPEED,
+            ATTR_SUPPORTED_FEATURES: FanEntityFeature.SET_SPEED,
             ATTR_PERCENTAGE: 75,
         },
     )
