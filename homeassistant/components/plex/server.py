@@ -12,8 +12,7 @@ import plexapi.server
 from requests import Session
 import requests.exceptions
 
-from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
-from homeassistant.components.media_player.const import MEDIA_TYPE_PLAYLIST
+from homeassistant.components.media_player import DOMAIN as MP_DOMAIN, MediaType
 from homeassistant.const import CONF_CLIENT_ID, CONF_TOKEN, CONF_URL, CONF_VERIFY_SSL
 from homeassistant.core import callback
 from homeassistant.helpers.debounce import Debouncer
@@ -42,7 +41,12 @@ from .const import (
     X_PLEX_PRODUCT,
     X_PLEX_VERSION,
 )
-from .errors import NoServersFound, ServerNotSpecified, ShouldUpdateConfigEntry
+from .errors import (
+    MediaNotFound,
+    NoServersFound,
+    ServerNotSpecified,
+    ShouldUpdateConfigEntry,
+)
 from .media_search import search_media
 from .models import PlexSession
 
@@ -194,7 +198,8 @@ class PlexServer:
                             config_entry_update_needed = True
                         else:
                             raise Unauthorized(  # pylint: disable=raise-missing-from
-                                "New certificate cannot be validated with provided token"
+                                "New certificate cannot be validated"
+                                " with provided token"
                             )
                     else:
                         raise
@@ -208,7 +213,8 @@ class PlexServer:
             shared_users = self.account.users() if self.account else []
         except Unauthorized:
             _LOGGER.warning(
-                "Plex account has limited permissions, shared account filtering will not be available"
+                "Plex account has limited permissions,"
+                " shared account filtering will not be available"
             )
         else:
             self._accounts = []
@@ -457,24 +463,24 @@ class PlexServer:
                     continue
 
                 session_username = next(iter(session.usernames), None)
-                for player in session.players:
-                    unique_id = f"{self.machine_identifier}:{player.machineIdentifier}"
-                    if unique_id not in self.active_sessions:
-                        _LOGGER.debug("Creating new Plex session: %s", session)
-                        self.active_sessions[unique_id] = PlexSession(self, session)
-                    if session_username and session_username not in monitored_users:
-                        ignored_clients.add(player.machineIdentifier)
-                        _LOGGER.debug(
-                            "Ignoring %s client owned by '%s'",
-                            player.product,
-                            session_username,
-                        )
-                        continue
+                player = session.player
+                unique_id = f"{self.machine_identifier}:{player.machineIdentifier}"
+                if unique_id not in self.active_sessions:
+                    _LOGGER.debug("Creating new Plex session: %s", session)
+                    self.active_sessions[unique_id] = PlexSession(self, session)
+                if session_username and session_username not in monitored_users:
+                    ignored_clients.add(player.machineIdentifier)
+                    _LOGGER.debug(
+                        "Ignoring %s client owned by '%s'",
+                        player.product,
+                        session_username,
+                    )
+                    continue
 
-                    process_device("session", player)
-                    available_clients[player.machineIdentifier][
-                        "session"
-                    ] = self.active_sessions[unique_id]
+                process_device("session", player)
+                available_clients[player.machineIdentifier][
+                    "session"
+                ] = self.active_sessions[unique_id]
 
         for device in devices:
             process_device("PMS", device)
@@ -619,37 +625,34 @@ class PlexServer:
             key = kwargs["plex_key"]
             try:
                 return self.fetch_item(key)
-            except NotFound:
-                _LOGGER.error("Media for key %s not found", key)
-                return None
+            except NotFound as err:
+                raise MediaNotFound(f"Media for key {key} not found") from err
 
-        if media_type == MEDIA_TYPE_PLAYLIST:
+        if media_type == MediaType.PLAYLIST:
             try:
                 playlist_name = kwargs["playlist_name"]
                 return self.playlist(playlist_name)
-            except KeyError:
-                _LOGGER.error("Must specify 'playlist_name' for this search")
-                return None
-            except NotFound:
-                _LOGGER.error(
-                    "Playlist '%s' not found",
-                    playlist_name,
-                )
-                return None
+            except KeyError as err:
+                raise MediaNotFound(
+                    "Must specify 'playlist_name' for this search"
+                ) from err
+            except NotFound as err:
+                raise MediaNotFound(f"Playlist '{playlist_name}' not found") from err
 
         try:
             library_name = kwargs.pop("library_name")
             library_section = self.library.section(library_name)
-        except KeyError:
-            _LOGGER.error("Must specify 'library_name' for this search")
-            return None
-        except NotFound:
+        except KeyError as err:
+            raise MediaNotFound("Must specify 'library_name' for this search") from err
+        except NotFound as err:
             library_sections = [section.title for section in self.library.sections()]
-            _LOGGER.error(
-                "Library '%s' not found in %s", library_name, library_sections
-            )
-            return None
+            raise MediaNotFound(
+                f"Library '{library_name}' not found in {library_sections}"
+            ) from err
 
+        _LOGGER.debug(
+            "Searching for %s in %s using: %s", media_type, library_section, kwargs
+        )
         return search_media(media_type, library_section, **kwargs)
 
     @property

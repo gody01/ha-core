@@ -8,13 +8,14 @@ import voluptuous as vol
 
 from homeassistant import auth, data_entry_flow
 from homeassistant.auth import (
+    EVENT_USER_UPDATED,
     InvalidAuthError,
     auth_store,
     const as auth_const,
     models as auth_models,
 )
 from homeassistant.auth.const import GROUP_ID_ADMIN, MFA_SESSION_EXPIRATION
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from tests.common import (
@@ -27,7 +28,7 @@ from tests.common import (
 
 
 @pytest.fixture
-def mock_hass(loop):
+def mock_hass(event_loop):
     """Home Assistant mock with minimum amount of data set to make it work with auth."""
     hass = Mock()
     hass.config.skip_pip = True
@@ -139,7 +140,7 @@ async def test_auth_manager_from_config_auth_modules(mock_hass):
     ]
 
 
-async def test_create_new_user(hass):
+async def test_create_new_user(hass: HomeAssistant) -> None:
     """Test creating new user."""
     events = []
 
@@ -167,12 +168,12 @@ async def test_create_new_user(hass):
     )
 
     step = await manager.login_flow.async_init(("insecure_example", None))
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
 
     step = await manager.login_flow.async_configure(
         step["flow_id"], {"username": "test-user", "password": "test-pass"}
     )
-    assert step["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert step["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     credential = step["result"]
     assert credential is not None
 
@@ -236,12 +237,12 @@ async def test_login_as_existing_user(mock_hass):
     )
 
     step = await manager.login_flow.async_init(("insecure_example", None))
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
 
     step = await manager.login_flow.async_configure(
         step["flow_id"], {"username": "test-user", "password": "test-pass"}
     )
-    assert step["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert step["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
 
     credential = step["result"]
     user = await manager.async_get_user_by_credentials(credential)
@@ -351,10 +352,10 @@ async def test_saving_loading(hass, hass_storage):
             assert r_token.last_used_at is None
             assert r_token.last_used_ip is None
         else:
-            assert False, f"Unknown client_id: {r_token.client_id}"
+            pytest.fail(f"Unknown client_id: {r_token.client_id}")
 
 
-async def test_cannot_retrieve_expired_access_token(hass):
+async def test_cannot_retrieve_expired_access_token(hass: HomeAssistant) -> None:
     """Test that we cannot retrieve expired access tokens."""
     manager = await auth.auth_manager_from_config(hass, [], [])
     user = MockUser().add_to_auth_manager(manager)
@@ -376,7 +377,7 @@ async def test_cannot_retrieve_expired_access_token(hass):
     assert await manager.async_validate_access_token(access_token) is None
 
 
-async def test_generating_system_user(hass):
+async def test_generating_system_user(hass: HomeAssistant) -> None:
     """Test that we can add a system user."""
     events = []
 
@@ -415,7 +416,7 @@ async def test_generating_system_user(hass):
     assert events[1].data["user_id"] == user.id
 
 
-async def test_refresh_token_requires_client_for_user(hass):
+async def test_refresh_token_requires_client_for_user(hass: HomeAssistant) -> None:
     """Test create refresh token for a user with client_id."""
     manager = await auth.auth_manager_from_config(hass, [], [])
     user = MockUser().add_to_auth_manager(manager)
@@ -432,7 +433,9 @@ async def test_refresh_token_requires_client_for_user(hass):
     assert token.access_token_expiration == auth_const.ACCESS_TOKEN_EXPIRATION
 
 
-async def test_refresh_token_not_requires_client_for_system_user(hass):
+async def test_refresh_token_not_requires_client_for_system_user(
+    hass: HomeAssistant,
+) -> None:
     """Test create refresh token for a system user w/o client_id."""
     manager = await auth.auth_manager_from_config(hass, [], [])
     user = await manager.async_create_system_user("Hass.io")
@@ -447,7 +450,9 @@ async def test_refresh_token_not_requires_client_for_system_user(hass):
     assert token.token_type == auth_models.TOKEN_TYPE_SYSTEM
 
 
-async def test_refresh_token_with_specific_access_token_expiration(hass):
+async def test_refresh_token_with_specific_access_token_expiration(
+    hass: HomeAssistant,
+) -> None:
     """Test create a refresh token with specific access token expiration."""
     manager = await auth.auth_manager_from_config(hass, [], [])
     user = MockUser().add_to_auth_manager(manager)
@@ -460,7 +465,7 @@ async def test_refresh_token_with_specific_access_token_expiration(hass):
     assert token.access_token_expiration == timedelta(days=100)
 
 
-async def test_refresh_token_type(hass):
+async def test_refresh_token_type(hass: HomeAssistant) -> None:
     """Test create a refresh token with token type."""
     manager = await auth.auth_manager_from_config(hass, [], [])
     user = MockUser().add_to_auth_manager(manager)
@@ -478,7 +483,7 @@ async def test_refresh_token_type(hass):
     assert token.token_type == auth_models.TOKEN_TYPE_NORMAL
 
 
-async def test_refresh_token_type_long_lived_access_token(hass):
+async def test_refresh_token_type_long_lived_access_token(hass: HomeAssistant) -> None:
     """Test create a refresh token has long-lived access token type."""
     manager = await auth.auth_manager_from_config(hass, [], [])
     user = MockUser().add_to_auth_manager(manager)
@@ -727,14 +732,14 @@ async def test_login_with_auth_module(mock_hass):
     )
 
     step = await manager.login_flow.async_init(("insecure_example", None))
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
 
     step = await manager.login_flow.async_configure(
         step["flow_id"], {"username": "test-user", "password": "test-pass"}
     )
 
     # After auth_provider validated, request auth module input form
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
     assert step["step_id"] == "mfa"
 
     step = await manager.login_flow.async_configure(
@@ -742,7 +747,7 @@ async def test_login_with_auth_module(mock_hass):
     )
 
     # Invalid code error
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
     assert step["step_id"] == "mfa"
     assert step["errors"] == {"base": "invalid_code"}
 
@@ -751,7 +756,7 @@ async def test_login_with_auth_module(mock_hass):
     )
 
     # Finally passed, get credential
-    assert step["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert step["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert step["result"]
     assert step["result"].id == "mock-id"
 
@@ -802,21 +807,21 @@ async def test_login_with_multi_auth_module(mock_hass):
     )
 
     step = await manager.login_flow.async_init(("insecure_example", None))
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
 
     step = await manager.login_flow.async_configure(
         step["flow_id"], {"username": "test-user", "password": "test-pass"}
     )
 
     # After auth_provider validated, request select auth module
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
     assert step["step_id"] == "select_mfa_module"
 
     step = await manager.login_flow.async_configure(
         step["flow_id"], {"multi_factor_auth_module": "module2"}
     )
 
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
     assert step["step_id"] == "mfa"
 
     step = await manager.login_flow.async_configure(
@@ -824,7 +829,7 @@ async def test_login_with_multi_auth_module(mock_hass):
     )
 
     # Finally passed, get credential
-    assert step["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert step["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert step["result"]
     assert step["result"].id == "mock-id"
 
@@ -870,13 +875,13 @@ async def test_auth_module_expired_session(mock_hass):
     )
 
     step = await manager.login_flow.async_init(("insecure_example", None))
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
 
     step = await manager.login_flow.async_configure(
         step["flow_id"], {"username": "test-user", "password": "test-pass"}
     )
 
-    assert step["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert step["type"] == data_entry_flow.FlowResultType.FORM
     assert step["step_id"] == "mfa"
 
     with patch(
@@ -887,7 +892,7 @@ async def test_auth_module_expired_session(mock_hass):
             step["flow_id"], {"pin": "test-pin"}
         )
         # login flow abort due session timeout
-        assert step["type"] == data_entry_flow.RESULT_TYPE_ABORT
+        assert step["type"] == data_entry_flow.FlowResultType.ABORT
         assert step["reason"] == "login_expired"
 
 
@@ -962,7 +967,7 @@ async def test_enable_mfa_for_user(hass, hass_storage):
     await manager.async_disable_user_mfa(user, "insecure_example")
 
 
-async def test_async_remove_user(hass):
+async def test_async_remove_user(hass: HomeAssistant) -> None:
     """Test removing a user."""
     events = async_capture_events(hass, "user_removed")
     manager = await auth.auth_manager_from_config(
@@ -1097,3 +1102,20 @@ async def test_rename_does_not_change_refresh_token(mock_hass):
     token_after = list(user.refresh_tokens.values())[0]
 
     assert token_before == token_after
+
+
+async def test_event_user_updated_fires(hass: HomeAssistant) -> None:
+    """Test the user updated event fires."""
+    manager = await auth.auth_manager_from_config(hass, [], [])
+    user = MockUser().add_to_auth_manager(manager)
+    await manager.async_create_refresh_token(user, CLIENT_ID)
+
+    assert len(list(user.refresh_tokens.values())) == 1
+
+    events = async_capture_events(hass, EVENT_USER_UPDATED)
+
+    await manager.async_update_user(user, name="new name")
+    assert user.name == "new name"
+
+    await hass.async_block_till_done()
+    assert len(events) == 1

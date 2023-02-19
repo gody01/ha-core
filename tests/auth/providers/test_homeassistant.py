@@ -11,6 +11,7 @@ from homeassistant.auth.providers import (
     auth_provider_from_config,
     homeassistant as hass_auth,
 )
+from homeassistant.core import HomeAssistant
 
 
 @pytest.fixture
@@ -36,7 +37,7 @@ async def test_validating_password_invalid_user(data, hass):
         data.validate_login("non-existing", "pw")
 
 
-async def test_not_allow_set_id():
+async def test_not_allow_set_id() -> None:
     """Test we are not allowed to set an ID in config."""
     hass = Mock()
     with pytest.raises(vol.Invalid):
@@ -115,24 +116,24 @@ async def test_login_flow_validates(data, hass):
     )
     flow = await provider.async_login_flow({})
     result = await flow.async_step_init()
-    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
 
     result = await flow.async_step_init(
         {"username": "incorrect-user", "password": "test-pass"}
     )
-    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["errors"]["base"] == "invalid_auth"
 
     result = await flow.async_step_init(
         {"username": "TEST-user ", "password": "incorrect-pass"}
     )
-    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["errors"]["base"] == "invalid_auth"
 
     result = await flow.async_step_init(
         {"username": "test-USER", "password": "test-pass"}
     )
-    assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert result["data"]["username"] == "test-USER"
 
 
@@ -216,24 +217,24 @@ async def test_legacy_login_flow_validates(legacy_data, hass):
     )
     flow = await provider.async_login_flow({})
     result = await flow.async_step_init()
-    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
 
     result = await flow.async_step_init(
         {"username": "incorrect-user", "password": "test-pass"}
     )
-    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["errors"]["base"] == "invalid_auth"
 
     result = await flow.async_step_init(
         {"username": "test-user", "password": "incorrect-pass"}
     )
-    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["errors"]["base"] == "invalid_auth"
 
     result = await flow.async_step_init(
         {"username": "test-user", "password": "test-pass"}
     )
-    assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert result["data"]["username"] == "test-user"
 
 
@@ -273,7 +274,7 @@ async def test_legacy_get_or_create_credentials(hass, legacy_data):
     assert credentials1 is not credentials3
 
 
-async def test_race_condition_in_data_loading(hass):
+async def test_race_condition_in_data_loading(hass: HomeAssistant) -> None:
     """Test race condition in the hass_auth.Data loading.
 
     Ref issue: https://github.com/home-assistant/core/issues/21569

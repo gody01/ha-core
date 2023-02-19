@@ -3,6 +3,7 @@ import asyncio
 from unittest.mock import patch
 
 from homeassistant.auth import auth_store
+from homeassistant.core import HomeAssistant
 
 
 async def test_loading_no_group_data_format(hass, hass_storage):
@@ -232,13 +233,13 @@ async def test_system_groups_store_id_and_name(hass, hass_storage):
     ]
 
 
-async def test_loading_race_condition(hass):
+async def test_loading_race_condition(hass: HomeAssistant) -> None:
     """Test only one storage load called when concurrent loading occurred ."""
     store = auth_store.AuthStore(hass)
     with patch(
-        "homeassistant.helpers.entity_registry.async_get_registry"
+        "homeassistant.helpers.entity_registry.async_get"
     ) as mock_ent_registry, patch(
-        "homeassistant.helpers.device_registry.async_get_registry"
+        "homeassistant.helpers.device_registry.async_get"
     ) as mock_dev_registry, patch(
         "homeassistant.helpers.storage.Store.async_load", return_value=None
     ) as mock_load:

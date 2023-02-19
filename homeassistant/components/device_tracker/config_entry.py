@@ -13,11 +13,12 @@ from homeassistant.const import (
     ATTR_LONGITUDE,
     STATE_HOME,
     STATE_NOT_HOME,
+    EntityCategory,
 )
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.entity import DeviceInfo, Entity, EntityCategory
+from homeassistant.helpers.entity import DeviceInfo, Entity
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.entity_platform import EntityPlatform
 from homeassistant.helpers.typing import StateType
@@ -30,17 +31,22 @@ from .const import (
     CONNECTED_DEVICE_REGISTERED,
     DOMAIN,
     LOGGER,
+    SourceType,
 )
+
+# mypy: disallow-any-generics
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up an entry."""
-    component: EntityComponent | None = hass.data.get(DOMAIN)
+    component: EntityComponent[BaseTrackerEntity] | None = hass.data.get(DOMAIN)
 
     if component is not None:
         return await component.async_setup_entry(entry)
 
-    component = hass.data[DOMAIN] = EntityComponent(LOGGER, DOMAIN, hass)
+    component = hass.data[DOMAIN] = EntityComponent[BaseTrackerEntity](
+        LOGGER, DOMAIN, hass
+    )
 
     # Clean up old devices created by device tracker entities in the past.
     # Can be removed after 2022.6
@@ -69,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload an entry."""
-    component: EntityComponent = hass.data[DOMAIN]
+    component: EntityComponent[BaseTrackerEntity] = hass.data[DOMAIN]
     return await component.async_unload_entry(entry)
 
 
@@ -149,9 +155,19 @@ def _async_register_mac(
             return
 
         # Make sure entity has a config entry and was disabled by the
-        # default disable logic in the integration.
+        # default disable logic in the integration and new entities
+        # are allowed to be added.
         if (
             entity_entry.config_entry_id is None
+            or (
+                (
+                    config_entry := hass.config_entries.async_get_entry(
+                        entity_entry.config_entry_id
+                    )
+                )
+                is not None
+                and config_entry.pref_disable_new_entities
+            )
             or entity_entry.disabled_by != er.RegistryEntryDisabler.INTEGRATION
         ):
             return
@@ -177,7 +193,7 @@ class BaseTrackerEntity(Entity):
         return None
 
     @property
-    def source_type(self) -> str:
+    def source_type(self) -> SourceType | str:
         """Return the source type, eg gps or router, of the device."""
         raise NotImplementedError
 

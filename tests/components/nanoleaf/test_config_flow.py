@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from aionanoleaf import InvalidToken, NanoleafException, Unauthorized, Unavailable
+from aionanoleaf import InvalidToken, Unauthorized, Unavailable
 import pytest
 
 from homeassistant import config_entries
@@ -81,7 +81,7 @@ async def test_user_unavailable_user_step_link_step(hass: HomeAssistant) -> None
 
 
 @pytest.mark.parametrize(
-    "error, reason",
+    ("error", "reason"),
     [
         (Unavailable, "cannot_connect"),
         (InvalidToken, "invalid_token"),
@@ -216,7 +216,7 @@ async def test_user_exception_user_step(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.parametrize(
-    "source, type_in_discovery_info",
+    ("source", "type_in_discovery_info"),
     [
         (config_entries.SOURCE_HOMEKIT, "_hap._tcp.local"),
         (config_entries.SOURCE_ZEROCONF, "_nanoleafms._tcp.local"),
@@ -302,57 +302,8 @@ async def test_reauth(hass: HomeAssistant) -> None:
     assert entry.data[CONF_TOKEN] == TEST_TOKEN
 
 
-async def test_import_config(hass: HomeAssistant) -> None:
-    """Test configuration import."""
-    with patch(
-        "homeassistant.components.nanoleaf.config_flow.Nanoleaf",
-        return_value=_mock_nanoleaf(TEST_HOST, TEST_TOKEN),
-    ), patch(
-        "homeassistant.components.nanoleaf.async_setup_entry",
-        return_value=True,
-    ) as mock_setup_entry:
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": config_entries.SOURCE_IMPORT},
-            data={CONF_HOST: TEST_HOST, CONF_TOKEN: TEST_TOKEN},
-        )
-    assert result["type"] == "create_entry"
-    assert result["title"] == TEST_NAME
-    assert result["data"] == {
-        CONF_HOST: TEST_HOST,
-        CONF_TOKEN: TEST_TOKEN,
-    }
-    await hass.async_block_till_done()
-    assert len(mock_setup_entry.mock_calls) == 1
-
-
 @pytest.mark.parametrize(
-    "error, reason",
-    [
-        (Unavailable, "cannot_connect"),
-        (InvalidToken, "invalid_token"),
-        (Exception, "unknown"),
-    ],
-)
-async def test_import_config_error(
-    hass: HomeAssistant, error: NanoleafException, reason: str
-) -> None:
-    """Test configuration import with errors in setup_finish."""
-    with patch(
-        "homeassistant.components.nanoleaf.config_flow.Nanoleaf.get_info",
-        side_effect=error,
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": config_entries.SOURCE_IMPORT},
-            data={CONF_HOST: TEST_HOST, CONF_TOKEN: TEST_TOKEN},
-        )
-    assert result["type"] == "abort"
-    assert result["reason"] == reason
-
-
-@pytest.mark.parametrize(
-    "source, type_in_discovery",
+    ("source", "type_in_discovery"),
     [
         (config_entries.SOURCE_HOMEKIT, "_hap._tcp.local"),
         (config_entries.SOURCE_ZEROCONF, "_nanoleafms._tcp.local"),
@@ -360,7 +311,7 @@ async def test_import_config_error(
     ],
 )
 @pytest.mark.parametrize(
-    "nanoleaf_conf_file, remove_config",
+    ("nanoleaf_conf_file", "remove_config"),
     [
         ({TEST_DEVICE_ID: {"token": TEST_TOKEN}}, True),
         ({TEST_HOST: {"token": TEST_TOKEN}}, True),
@@ -394,8 +345,7 @@ async def test_import_discovery_integration(
     nanoleaf_conf_file: dict[str, dict[str, str]],
     remove_config: bool,
 ) -> None:
-    """
-    Test discovery integration import.
+    """Test discovery integration import.
 
     Test with different discovery flow sources and corresponding types.
     Test with different .nanoleaf_conf files with device_id (>= 2021.4), host (< 2021.4) and combination.

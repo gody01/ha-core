@@ -46,7 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name=entry.title,
         manufacturer="GoodWe",
         model=inverter.model_name,
-        sw_version=f"{inverter.software_version} ({inverter.arm_version})",
+        sw_version=f"{inverter.firmware} / {inverter.arm_firmware}",
     )
 
     async def async_update_data():
@@ -94,7 +94,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

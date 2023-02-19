@@ -13,9 +13,8 @@ from homeassistant.components.light import (
     ATTR_MAX_MIREDS,
     ATTR_MIN_MIREDS,
     ATTR_SUPPORTED_COLOR_MODES,
-    COLOR_MODE_COLOR_TEMP,
-    COLOR_MODE_HS,
     DOMAIN as LIGHT_DOMAIN,
+    ColorMode,
 )
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -25,16 +24,12 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from tests.common import MockConfigEntry
 
-
-async def test_light_state_temperature(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-    mock_elgato: MagicMock,
-) -> None:
+@pytest.mark.usefixtures("init_integration", "mock_elgato")
+async def test_light_state_temperature(hass: HomeAssistant) -> None:
     """Test the creation and values of the Elgato Lights in temperature mode."""
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
@@ -45,10 +40,10 @@ async def test_light_state_temperature(
     assert state.attributes.get(ATTR_BRIGHTNESS) == 54
     assert state.attributes.get(ATTR_COLOR_TEMP) == 297
     assert state.attributes.get(ATTR_HS_COLOR) == (27.316, 47.743)
-    assert state.attributes.get(ATTR_COLOR_MODE) == COLOR_MODE_COLOR_TEMP
+    assert state.attributes.get(ATTR_COLOR_MODE) == ColorMode.COLOR_TEMP
     assert state.attributes.get(ATTR_MIN_MIREDS) == 143
     assert state.attributes.get(ATTR_MAX_MIREDS) == 344
-    assert state.attributes.get(ATTR_SUPPORTED_COLOR_MODES) == [COLOR_MODE_COLOR_TEMP]
+    assert state.attributes.get(ATTR_SUPPORTED_COLOR_MODES) == [ColorMode.COLOR_TEMP]
     assert state.state == STATE_ON
 
     entry = entity_registry.async_get("light.frenck")
@@ -71,14 +66,9 @@ async def test_light_state_temperature(
     assert device_entry.hw_version == "53"
 
 
-@pytest.mark.parametrize(
-    "mock_elgato", [{"settings": "color", "state": "color"}], indirect=True
-)
-async def test_light_state_color(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-    mock_elgato: MagicMock,
-) -> None:
+@pytest.mark.parametrize("device_fixtures", ["light-strip"])
+@pytest.mark.usefixtures("device_fixtures", "init_integration", "mock_elgato")
+async def test_light_state_color(hass: HomeAssistant) -> None:
     """Test the creation and values of the Elgato Lights in temperature mode."""
     entity_registry = er.async_get(hass)
 
@@ -90,10 +80,10 @@ async def test_light_state_color(
     assert state.attributes.get(ATTR_HS_COLOR) == (358.0, 6.0)
     assert state.attributes.get(ATTR_MIN_MIREDS) == 153
     assert state.attributes.get(ATTR_MAX_MIREDS) == 285
-    assert state.attributes.get(ATTR_COLOR_MODE) == COLOR_MODE_HS
+    assert state.attributes.get(ATTR_COLOR_MODE) == ColorMode.HS
     assert state.attributes.get(ATTR_SUPPORTED_COLOR_MODES) == [
-        COLOR_MODE_COLOR_TEMP,
-        COLOR_MODE_HS,
+        ColorMode.COLOR_TEMP,
+        ColorMode.HS,
     ]
     assert state.state == STATE_ON
 
@@ -103,11 +93,11 @@ async def test_light_state_color(
 
 
 @pytest.mark.parametrize(
-    "mock_elgato", [{"settings": "color", "state": "temperature"}], indirect=True
+    ("device_fixtures", "state_variant"), [("light-strip", "state-color-temperature")]
 )
+@pytest.mark.usefixtures("state_variant", "device_fixtures", "init_integration")
 async def test_light_change_state_temperature(
     hass: HomeAssistant,
-    init_integration: MockConfigEntry,
     mock_elgato: MagicMock,
 ) -> None:
     """Test the change of state of a Elgato Key Light device."""
@@ -174,33 +164,29 @@ async def test_light_change_state_temperature(
 
 
 @pytest.mark.parametrize("service", [SERVICE_TURN_ON, SERVICE_TURN_OFF])
+@pytest.mark.usefixtures("init_integration")
 async def test_light_unavailable(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-    mock_elgato: MagicMock,
-    service: str,
+    hass: HomeAssistant, mock_elgato: MagicMock, service: str
 ) -> None:
     """Test error/unavailable handling of an Elgato Light."""
     mock_elgato.state.side_effect = ElgatoError
     mock_elgato.light.side_effect = ElgatoError
 
-    await hass.services.async_call(
-        LIGHT_DOMAIN,
-        service,
-        {ATTR_ENTITY_ID: "light.frenck"},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            LIGHT_DOMAIN,
+            service,
+            {ATTR_ENTITY_ID: "light.frenck"},
+            blocking=True,
+        )
+
     state = hass.states.get("light.frenck")
     assert state
     assert state.state == STATE_UNAVAILABLE
 
 
-async def test_light_identify(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-    mock_elgato: MagicMock,
-) -> None:
+@pytest.mark.usefixtures("init_integration")
+async def test_light_identify(hass: HomeAssistant, mock_elgato: MagicMock) -> None:
     """Test identifying an Elgato Light."""
     await hass.services.async_call(
         DOMAIN,
@@ -215,22 +201,22 @@ async def test_light_identify(
     mock_elgato.identify.assert_called_with()
 
 
+@pytest.mark.usefixtures("init_integration")
 async def test_light_identify_error(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-    mock_elgato: MagicMock,
-    caplog: pytest.LogCaptureFixture,
+    hass: HomeAssistant, mock_elgato: MagicMock
 ) -> None:
     """Test error occurred during identifying an Elgato Light."""
     mock_elgato.identify.side_effect = ElgatoError
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_IDENTIFY,
-        {
-            ATTR_ENTITY_ID: "light.frenck",
-        },
-        blocking=True,
-    )
-    await hass.async_block_till_done()
+    with pytest.raises(
+        HomeAssistantError, match="An error occurred while identifying the Elgato Light"
+    ):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_IDENTIFY,
+            {
+                ATTR_ENTITY_ID: "light.frenck",
+            },
+            blocking=True,
+        )
+
     assert len(mock_elgato.identify.mock_calls) == 1
-    assert "An error occurred while identifying the Elgato Light" in caplog.text
