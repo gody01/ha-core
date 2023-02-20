@@ -1251,6 +1251,12 @@
       "config_flow": false,
       "iot_class": "cloud_push"
     },
+    "ecovent_v2": {
+      "name": "Vento Eco Vent v 2.0",
+      "integration_type": "hub",
+      "config_flow": true,
+      "iot_class": "local_polling"
+    },
     "ecowitt": {
       "name": "Ecowitt",
       "integration_type": "hub",

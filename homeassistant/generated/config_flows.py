@@ -106,6 +106,7 @@ FLOWS = {
         "easyenergy",
         "ecobee",
         "econet",
+        "ecovent_v2",
         "ecowitt",
         "efergy",
         "eight_sleep",
