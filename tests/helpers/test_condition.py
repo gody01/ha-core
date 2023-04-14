@@ -1,11 +1,11 @@
 """Test the condition helper."""
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 import voluptuous as vol
 
-from homeassistant.components import sun
 import homeassistant.components.automation as automation
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.const import (
@@ -16,7 +16,7 @@ from homeassistant.const import (
     SUN_EVENT_SUNRISE,
     SUN_EVENT_SUNSET,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConditionError, HomeAssistantError
 from homeassistant.helpers import (
     condition,
@@ -33,18 +33,9 @@ from tests.typing import WebSocketGenerator
 
 
 @pytest.fixture
-def calls(hass):
+def calls(hass: HomeAssistant) -> list[ServiceCall]:
     """Track calls to a mock service."""
     return async_mock_service(hass, "test", "automation")
-
-
-@pytest.fixture(autouse=True)
-def setup_comp(hass):
-    """Initialize components."""
-    hass.config.set_time_zone(hass.config.time_zone)
-    hass.loop.run_until_complete(
-        async_setup_component(hass, sun.DOMAIN, {sun.DOMAIN: {}})
-    )
 
 
 def assert_element(trace_element, expected_element, path):
@@ -69,7 +60,7 @@ def assert_element(trace_element, expected_element, path):
 
 
 @pytest.fixture(autouse=True)
-def prepare_condition_trace():
+def prepare_condition_trace() -> None:
     """Clear previous trace."""
     trace.trace_clear()
 
@@ -1125,6 +1116,83 @@ async def test_state_raises(hass: HomeAssistant) -> None:
         test(hass)
 
 
+async def test_state_for(hass: HomeAssistant) -> None:
+    """Test state with duration."""
+    config = {
+        "condition": "and",
+        "conditions": [
+            {
+                "condition": "state",
+                "entity_id": ["sensor.temperature"],
+                "state": "100",
+                "for": {"seconds": 5},
+            },
+        ],
+    }
+    config = cv.CONDITION_SCHEMA(config)
+    config = await condition.async_validate_condition_config(hass, config)
+    test = await condition.async_from_config(hass, config)
+
+    hass.states.async_set("sensor.temperature", 100)
+    assert not test(hass)
+
+    now = dt_util.utcnow() + timedelta(seconds=5)
+    with patch("homeassistant.util.dt.utcnow", return_value=now):
+        assert test(hass)
+
+
+async def test_state_for_template(hass: HomeAssistant) -> None:
+    """Test state with templated duration."""
+    config = {
+        "condition": "and",
+        "conditions": [
+            {
+                "condition": "state",
+                "entity_id": ["sensor.temperature"],
+                "state": "100",
+                "for": {"seconds": "{{ states('input_number.test')|int }}"},
+            },
+        ],
+    }
+    config = cv.CONDITION_SCHEMA(config)
+    config = await condition.async_validate_condition_config(hass, config)
+    test = await condition.async_from_config(hass, config)
+
+    hass.states.async_set("sensor.temperature", 100)
+    hass.states.async_set("input_number.test", 5)
+    assert not test(hass)
+
+    now = dt_util.utcnow() + timedelta(seconds=5)
+    with patch("homeassistant.util.dt.utcnow", return_value=now):
+        assert test(hass)
+
+
+@pytest.mark.parametrize("for_template", [{"{{invalid}}": 5}, {"hours": "{{ 1/0 }}"}])
+async def test_state_for_invalid_template(
+    hass: HomeAssistant, for_template: dict[str, Any]
+) -> None:
+    """Test state with invalid templated duration."""
+    config = {
+        "condition": "and",
+        "conditions": [
+            {
+                "condition": "state",
+                "entity_id": ["sensor.temperature"],
+                "state": "100",
+                "for": for_template,
+            },
+        ],
+    }
+    config = cv.CONDITION_SCHEMA(config)
+    config = await condition.async_validate_condition_config(hass, config)
+    test = await condition.async_from_config(hass, config)
+
+    hass.states.async_set("sensor.temperature", 100)
+    hass.states.async_set("input_number.test", 5)
+    with pytest.raises(ConditionError):
+        assert not test(hass)
+
+
 async def test_state_unknown_attribute(hass: HomeAssistant) -> None:
     """Test that state returns False on unknown attribute."""
     # Unknown attribute
@@ -2142,7 +2210,7 @@ async def assert_automation_condition_trace(hass_ws_client, automation_id, expec
 
 
 async def test_if_action_before_sunrise_no_offset(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was before sunrise.
 
@@ -2213,7 +2281,7 @@ async def test_if_action_before_sunrise_no_offset(
 
 
 async def test_if_action_after_sunrise_no_offset(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was after sunrise.
 
@@ -2284,7 +2352,7 @@ async def test_if_action_after_sunrise_no_offset(
 
 
 async def test_if_action_before_sunrise_with_offset(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was before sunrise with offset.
 
@@ -2407,7 +2475,7 @@ async def test_if_action_before_sunrise_with_offset(
 
 
 async def test_if_action_before_sunset_with_offset(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was before sunset with offset.
 
@@ -2530,7 +2598,7 @@ async def test_if_action_before_sunset_with_offset(
 
 
 async def test_if_action_after_sunrise_with_offset(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was after sunrise with offset.
 
@@ -2677,7 +2745,7 @@ async def test_if_action_after_sunrise_with_offset(
 
 
 async def test_if_action_after_sunset_with_offset(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was after sunset with offset.
 
@@ -2752,7 +2820,7 @@ async def test_if_action_after_sunset_with_offset(
 
 
 async def test_if_action_after_and_before_during(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was after sunrise and before sunset.
 
@@ -2855,7 +2923,7 @@ async def test_if_action_after_and_before_during(
 
 
 async def test_if_action_before_or_after_during(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was before sunrise or after sunset.
 
@@ -2978,7 +3046,7 @@ async def test_if_action_before_or_after_during(
 
 
 async def test_if_action_before_sunrise_no_offset_kotzebue(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was before sunrise.
 
@@ -3055,7 +3123,7 @@ async def test_if_action_before_sunrise_no_offset_kotzebue(
 
 
 async def test_if_action_after_sunrise_no_offset_kotzebue(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was after sunrise.
 
@@ -3132,7 +3200,7 @@ async def test_if_action_after_sunrise_no_offset_kotzebue(
 
 
 async def test_if_action_before_sunset_no_offset_kotzebue(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was before sunrise.
 
@@ -3209,7 +3277,7 @@ async def test_if_action_before_sunset_no_offset_kotzebue(
 
 
 async def test_if_action_after_sunset_no_offset_kotzebue(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, calls: list[ServiceCall]
 ) -> None:
     """Test if action was after sunrise.
 
