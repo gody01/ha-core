@@ -64,6 +64,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"Unable to connect to {entry.data[CONF_IP_ADDRESS]}"
         ) from err
 
+    hass.data[DOMAIN][entry.entry_id] = {"device": device}
+
     async def async_update_connected_plc_devices() -> LogicalNetwork:
         """Fetch data from API endpoint."""
         assert device.plcnet
@@ -155,10 +157,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             update_interval=SHORT_UPDATE_INTERVAL,
         )
 
-    hass.data[DOMAIN][entry.entry_id] = {"device": device, "coordinators": coordinators}
-
     for coordinator in coordinators.values():
         await coordinator.async_config_entry_first_refresh()
+
+    hass.data[DOMAIN][entry.entry_id]["coordinators"] = coordinators
 
     await hass.config_entries.async_forward_entry_setups(entry, platforms(device))
 
@@ -185,7 +187,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 @callback
 def platforms(device: Device) -> set[Platform]:
     """Assemble supported platforms."""
-    supported_platforms = {Platform.SENSOR, Platform.SWITCH}
+    supported_platforms = {Platform.BUTTON, Platform.SENSOR, Platform.SWITCH}
     if device.plcnet:
         supported_platforms.add(Platform.BINARY_SENSOR)
     if device.device and "wifi1" in device.device.features:
