@@ -11,7 +11,6 @@ from homeassistant.const import (
     CONF_NAME,
     CONF_PASSWORD,
     CONF_PORT,
-    Platform,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator

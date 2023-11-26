@@ -5,15 +5,11 @@ from __future__ import annotations
 from ecoventv2 import Fan
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -31,7 +27,7 @@ async def async_setup_entry(
             VentoNumber(
                 hass,
                 config,
-                "_humidity_threshold_set",
+                "_humidity_threshold",
                 "humidity_treshold",
                 None,
                 "mdi:water-percent",
@@ -45,7 +41,7 @@ async def async_setup_entry(
             VentoNumber(
                 hass,
                 config,
-                "_analogV_treshold_set",
+                "_analogV_treshold",
                 "analogV_treshold",
                 None,
                 "mdi:flash-triangle-outline",
@@ -59,7 +55,7 @@ async def async_setup_entry(
             VentoNumber(
                 hass,
                 config,
-                "_boost_time_set",
+                "_boost_time",
                 "boost_time",
                 None,
                 "mdi:fan-clock",
@@ -111,7 +107,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_icon = icon
         self._attr_mode = mode
         self._attr_native_unit_of_measurement = unit_of_measurement
-        self._attr_unique_id = self._fan.name + unique_id
+        self._attr_unique_id = unique_id
         self._attr_native_value = getattr(self._fan, method)
         self._attr_name = self._attr_unique_id
 
