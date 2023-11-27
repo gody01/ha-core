@@ -348,6 +348,7 @@ FLOWS = {
         "opower",
         "oralb",
         "otbr",
+        "ourgroceries",
         "overkiz",
         "ovo_energy",
         "owntracks",
