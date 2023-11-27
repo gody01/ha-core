@@ -10,14 +10,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import DOMAIN
 from .coordinator import VentoFanDataUpdateCoordinator
 
 
-async def async_setup_entry(
+async def async_setup_platform(
     hass: HomeAssistant,
-    config: ConfigEntry,
+    config: ConfigType,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the fan switches."""
@@ -63,6 +64,15 @@ async def async_setup_entry(
     )
 
 
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up the Vento Switch config entry."""
+    await async_setup_platform(hass, config, async_add_entities)
+
+
 class VentoSwitch(CoordinatorEntity, SwitchEntity):
     """Class for Vento Fan Switches."""
 
@@ -71,7 +81,7 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        config: ConfigEntry,
+        config,
         name="VentoSwitch",
         method=None,
         device_class: SwitchDeviceClass | None = None,
@@ -99,13 +109,13 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
             name=self._fan.name,
         )
 
-    async def async_turn_on(self, **kwargs):
+    async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
         self._attr_is_on = True
         self._fan.set_param(self._func, "on")
         self.schedule_update_ha_state()
 
-    async def async_turn_off(self, **kwargs):
+    async def async_turn_off(self, **kwargs) -> None:
         """Turn the device off."""
         self._attr_is_on = False
         self._fan.set_param(self._func, "off")

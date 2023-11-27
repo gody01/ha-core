@@ -21,14 +21,12 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "fan"]
-
-PLATFORMS = [
+PLATFORMS: list[Platform] = [
     Platform.SENSOR,
-    Platform.BINARY_SENSOR,
     Platform.SWITCH,
-    Platform.FAN,
+    Platform.BINARY_SENSOR,
     Platform.NUMBER,
+    Platform.FAN,
 ]
 
 

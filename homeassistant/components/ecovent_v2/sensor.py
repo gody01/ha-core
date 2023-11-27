@@ -13,16 +13,21 @@ from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import (
+    DataUpdateCoordinator,
+    CoordinatorEntity,
+)
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import DOMAIN
 from .coordinator import VentoFanDataUpdateCoordinator
 
 
-async def async_setup_entry(
+async def async_setup_platform(
     hass: HomeAssistant,
-    config: ConfigEntry,
+    config: ConfigType,
     async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up Vento Sensors."""
     async_add_entities(
@@ -145,8 +150,17 @@ async def async_setup_entry(
                 True,
                 "mdi:ip-network",
             ),
-        ]
+        ],
     )
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up the Vento Sensor config entry."""
+    await async_setup_platform(hass, config, async_add_entities)
 
 
 # VentoSensor class
@@ -156,7 +170,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        config: ConfigEntry,
+        config,
         name="VentoSensor",
         method=None,
         native_unit_of_measurement=None,
@@ -170,22 +184,23 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
+        self._attr_unique_id = self._fan.id + method
+        self._attr_name = self._fan.name + name
         self._attr_native_unit_of_measurement = native_unit_of_measurement
         self._attr_device_class = device_class
         self._attr_state_class = state_class
         self._attr_entity_category = entity_category
-        self._attr_name = self._fan.name + name
-        self._attr_unique_id = self._fan.id + name
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
+        self._attr_native_value = self._method()
         self._attr_icon = icon
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},
-            name=name,
+            name=self._fan.name,
         )
 
     @property
-    def native_value(self):
+    def native_value(self) -> str:
         """Get native value property from method."""
         self._attr_native_value = self._method()
         return self._attr_native_value

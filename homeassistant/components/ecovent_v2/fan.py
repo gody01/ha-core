@@ -11,6 +11,7 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import DOMAIN, SERVICE_FILTER_TIMER_RESET, SERVICE_RESET_ALARMS
 from .coordinator import VentoFanDataUpdateCoordinator
@@ -31,13 +32,23 @@ PRESET_MODES = ["low", "medium", "high", "manual"]
 DIRECTIONS = ["ventilation", "air_supply", "heat_recovery"]
 
 
+async def async_setup_platform(
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
+) -> None:
+    """Set up the Ecovent fan platform."""
+    async_add_entities([VentoExpertFan(hass, config)])
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigEntry,
+    config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Ecovent Fan config entry."""
-    async_add_entities([VentoExpertFan(hass, config)])
+    await async_setup_platform(hass, config_entry, async_add_entities, None)
 
     platform = entity_platform.async_get_current_platform()
 
@@ -54,7 +65,11 @@ async def async_setup_entry(
 class VentoExpertFan(CoordinatorEntity, FanEntity):
     """Cento Expert Coordinator Class."""
 
-    def __init__(self, hass: HomeAssistant, config: ConfigEntry) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config,
+    ) -> None:
         """Initialize fan."""
 
         coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
@@ -64,21 +79,22 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._percentage = self._fan.man_speed
         self._attr_unique_id = self._fan.id
         self._attr_name = self._fan.name
-        self._attr_extra_state_attributes = {"ipv4_address": self._fan.curent_wifi_ip}
+        # self._attr_extra_state_attributes = {"ipv4_address": self._fan.curent_wifi_ip}
         self._attr_supported_features = FULL_SUPPORT
+
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},
-            name=self._fan.name,
+            name=self.name,
             model=self._fan.unit_type,
             sw_version=self._fan.firmware,
             manufacturer="Blauberg",
             configuration_url=f"http://{self._fan.curent_wifi_ip}",
         )
 
-    @property
-    def extra_state_attributes(self):
-        """Return extra state attributes."""
-        return self._attr_extra_state_attributes
+    # @property
+    # def extra_state_attributes(self):
+    #     """Return extra state attributes."""
+    #     return self._attr_extra_state_attributes
 
     @property
     def name(self) -> str:
@@ -125,7 +141,21 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         """Oscillating."""
         return self._fan.airflow == "heat_recovery"
 
-    # pylint: disable=arguments-differ
+    @property
+    def boost_time(self) -> int:
+        """Boost time."""
+        return self._fan.boost_time
+
+    @property
+    def humidity_treshold(self) -> int:
+        """Boost time."""
+        return self._fan.humidity_treshold
+
+    @property
+    def analogV_treshold(self) -> int:
+        """Boost time."""
+        return self._fan.analogV_treshold
+
     async def async_turn_on(
         self,
         percentage: int | None = None,
