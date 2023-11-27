@@ -66,18 +66,14 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._attr_name = self._fan.name
         self._attr_extra_state_attributes = {"ipv4_address": self._fan.curent_wifi_ip}
         self._attr_supported_features = FULL_SUPPORT
-
-    @property
-    def device_info(self) -> DeviceInfo | None:
-        """Device info."""
-        return {
-            "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._fan.name,
-            "model": self._fan.unit_type,
-            "sw_version": self._fan.firmware,
-            "manufacturer": "Blauberg",
-            "configuration_url": f"http://{self._fan.curent_wifi_ip}",
-        }
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._fan.id)},
+            name=self._fan.name,
+            model=self._fan.unit_type,
+            sw_version=self._fan.firmware,
+            manufacturer="Blauberg",
+            configuration_url=f"http://{self._fan.curent_wifi_ip}",
+        )
 
     @property
     def extra_state_attributes(self):
