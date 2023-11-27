@@ -62,7 +62,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
         self._fan = coordinator._fan
         self._percentage = self._fan.man_speed
-        self._attr_unique_id = self._fan.idunique_id
+        self._attr_unique_id = self._fan.id
         self._attr_name = self._fan.name
         self._attr_extra_state_attributes = {"ipv4_address": self._fan.curent_wifi_ip}
         self._attr_supported_features = FULL_SUPPORT
