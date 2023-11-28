@@ -12,15 +12,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import DOMAIN
 from .coordinator import VentoFanDataUpdateCoordinator
 
 
-async def async_setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
+    config: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the entities."""
@@ -62,15 +61,6 @@ async def async_setup_platform(
     )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up the Vento Binary Sensor config entry."""
-    await async_setup_platform(hass, config, async_add_entities)
-
-
 class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Vento Binary Sensor class."""
 
@@ -95,9 +85,9 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         self._attr_icon = icon
+
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._fan.id)},
-            name=self._fan.name,
+            identifiers={(DOMAIN, self._fan.id)}, name=self._fan.name
         )
 
     @property
