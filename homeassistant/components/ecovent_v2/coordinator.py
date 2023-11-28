@@ -1,3 +1,4 @@
+"""VentoUpdateCoordinator class."""
 # from __future__ import annotations
 from datetime import timedelta
 import logging
@@ -21,6 +22,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
+    """Class for Vento Fan Update Coordinator."""
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -46,6 +49,7 @@ class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> None:
         """Fetch data from API endpoint.
+
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
