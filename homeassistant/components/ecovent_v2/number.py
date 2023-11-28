@@ -80,7 +80,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        config,
+        config: ConfigEntry,
         name="VentoNumber",
         method="",
         state=None,
@@ -109,9 +109,9 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_native_unit_of_measurement = unit_of_measurement
         # self._attr_name = self._fan.name + name
         self._attr_name = name
-
         self._attr_unique_id = self._fan.id + method
         self._attr_native_value = getattr(self._fan, method)
+        # self._method = getattr(self, method)
         self._func = method
 
         if native_min_value is not None:
@@ -120,7 +120,6 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
             self._attr_native_max_value = native_max_value
         if native_step is not None:
             self._attr_native_step = native_step
-
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},
             name=self._fan.name,
@@ -128,16 +127,8 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
-        self.set_native_value(value)
-        await self.coordinator.async_refresh()
-        self.async_write_ha_state()
-
-    def set_native_value(self, value: float) -> None:
-        """Update the current value."""
         self._attr_native_value = value
         intval = int(value)
         self._fan.set_param(self._func, hex(intval).replace("0x", "").zfill(2))
-
-    def async_update(self) -> None:
-        """Update from device"""
-        self._attr_native_value = getattr(self._fan, self._func)
+        self.async_write_ha_state()
+        await self.coordinator.async_refresh()
