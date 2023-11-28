@@ -175,7 +175,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_state_class = state_class
         self._attr_entity_category = entity_category
         self._attr_name = self._fan.name + name
-        self._attr_unique_id = self._fan.id + "_" + method
+        self._attr_unique_id = self._fan.id + name
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         self._attr_icon = icon
