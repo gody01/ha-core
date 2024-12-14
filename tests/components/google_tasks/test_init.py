@@ -1,8 +1,12 @@
 """Tests for Google Tasks."""
+
 from collections.abc import Awaitable, Callable
 import http
+from http import HTTPStatus
 import time
+from unittest.mock import Mock
 
+from httplib2 import Response
 import pytest
 
 from homeassistant.components.google_tasks import DOMAIN
@@ -10,15 +14,19 @@ from homeassistant.components.google_tasks.const import OAUTH2_TOKEN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
+from .conftest import LIST_TASK_LIST_RESPONSE
+
 from tests.common import MockConfigEntry
 from tests.test_util.aiohttp import AiohttpClientMocker
 
 
+@pytest.mark.parametrize("api_responses", [[LIST_TASK_LIST_RESPONSE]])
 async def test_setup(
     hass: HomeAssistant,
     integration_setup: Callable[[], Awaitable[bool]],
     config_entry: MockConfigEntry,
     setup_credentials: None,
+    mock_http_response: Mock,
 ) -> None:
     """Test successful setup and unload."""
     assert config_entry.state is ConfigEntryState.NOT_LOADED
@@ -29,17 +37,19 @@ async def test_setup(
     await hass.config_entries.async_unload(config_entry.entry_id)
     await hass.async_block_till_done()
 
-    assert config_entry.state == ConfigEntryState.NOT_LOADED
+    assert config_entry.state is ConfigEntryState.NOT_LOADED
     assert not hass.services.async_services().get(DOMAIN)
 
 
 @pytest.mark.parametrize("expires_at", [time.time() - 3600], ids=["expired"])
+@pytest.mark.parametrize("api_responses", [[LIST_TASK_LIST_RESPONSE]])
 async def test_expired_token_refresh_success(
     hass: HomeAssistant,
     integration_setup: Callable[[], Awaitable[bool]],
     aioclient_mock: AiohttpClientMocker,
     config_entry: MockConfigEntry,
     setup_credentials: None,
+    mock_http_response: Mock,
 ) -> None:
     """Test expired token is refreshed."""
 
@@ -67,7 +77,7 @@ async def test_expired_token_refresh_success(
         (
             time.time() - 3600,
             http.HTTPStatus.UNAUTHORIZED,
-            ConfigEntryState.SETUP_RETRY,  # Will trigger reauth in the future
+            ConfigEntryState.SETUP_ERROR,
         ),
         (
             time.time() - 3600,
@@ -97,3 +107,22 @@ async def test_expired_token_refresh_failure(
     await integration_setup()
 
     assert config_entry.state is expected_state
+
+
+@pytest.mark.parametrize(
+    "response_handler",
+    [
+        ([(Response({"status": HTTPStatus.INTERNAL_SERVER_ERROR}), b"")]),
+    ],
+)
+async def test_setup_error(
+    hass: HomeAssistant,
+    setup_credentials: None,
+    integration_setup: Callable[[], Awaitable[bool]],
+    mock_http_response: Mock,
+    config_entry: MockConfigEntry,
+) -> None:
+    """Test an error returned by the server when setting up the platform."""
+
+    assert not await integration_setup()
+    assert config_entry.state is ConfigEntryState.SETUP_RETRY

@@ -1,32 +1,33 @@
 """Tests for Google Tasks todo platform."""
 
-
 from collections.abc import Awaitable, Callable
 from http import HTTPStatus
 import json
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from httplib2 import Response
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from homeassistant.components.todo import DOMAIN as TODO_DOMAIN
-from homeassistant.const import Platform
+from homeassistant.components.todo import (
+    ATTR_DESCRIPTION,
+    ATTR_DUE_DATE,
+    ATTR_ITEM,
+    ATTR_RENAME,
+    ATTR_STATUS,
+    DOMAIN as TODO_DOMAIN,
+    TodoServices,
+)
+from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+
+from .conftest import LIST_TASK_LIST_RESPONSE, create_response_object
 
 from tests.typing import WebSocketGenerator
 
 ENTITY_ID = "todo.my_tasks"
-LIST_TASK_LIST_RESPONSE = {
-    "items": [
-        {
-            "id": "task-list-id-1",
-            "title": "My tasks",
-        },
-    ]
-}
 EMPTY_RESPONSE = {}
 LIST_TASKS_RESPONSE = {
     "items": [],
@@ -49,6 +50,7 @@ LIST_TASKS_RESPONSE_WATER = {
             "id": "some-task-id",
             "title": "Water",
             "status": "needsAction",
+            "description": "Any size is ok",
             "position": "00000000000000000001",
         },
     ],
@@ -75,6 +77,43 @@ LIST_TASKS_RESPONSE_MULTIPLE = {
         },
     ],
 }
+LIST_TASKS_RESPONSE_REORDER = {
+    "items": [
+        {
+            "id": "some-task-id-2",
+            "title": "Milk",
+            "status": "needsAction",
+            "position": "00000000000000000002",
+        },
+        {
+            "id": "some-task-id-1",
+            "title": "Water",
+            "status": "needsAction",
+            "position": "00000000000000000001",
+        },
+        # Task 3 moved after task 1
+        {
+            "id": "some-task-id-3",
+            "title": "Cheese",
+            "status": "needsAction",
+            "position": "000000000000000000011",
+        },
+    ],
+}
+
+# API responses when testing update methods
+UPDATE_API_RESPONSES = [
+    LIST_TASK_LIST_RESPONSE,
+    LIST_TASKS_RESPONSE_WATER,
+    EMPTY_RESPONSE,  # update
+    LIST_TASKS_RESPONSE,  # refresh after update
+]
+CREATE_API_RESPONSES = [
+    LIST_TASK_LIST_RESPONSE,
+    LIST_TASKS_RESPONSE,
+    EMPTY_RESPONSE,  # create
+    LIST_TASKS_RESPONSE,  # refresh
+]
 
 
 @pytest.fixture
@@ -105,22 +144,8 @@ async def ws_get_items(
     return get
 
 
-@pytest.fixture(name="api_responses")
-def mock_api_responses() -> list[dict | list]:
-    """Fixture for API responses to return during test."""
-    return []
-
-
-def create_response_object(api_response: dict | list) -> tuple[Response, bytes]:
-    """Create an http response."""
-    return (
-        Response({"Content-Type": "application/json"}),
-        json.dumps(api_response).encode(),
-    )
-
-
 def create_batch_response_object(
-    content_ids: list[str], api_responses: list[dict | list | Response]
+    content_ids: list[str], api_responses: list[dict | list | Response | None]
 ) -> tuple[Response, bytes]:
     """Create a batch response in the multipart/mixed format."""
     assert len(api_responses) == len(content_ids)
@@ -130,7 +155,7 @@ def create_batch_response_object(
         body = ""
         if isinstance(api_response, Response):
             status = api_response.status
-        else:
+        elif api_response is not None:
             body = json.dumps(api_response)
         content.extend(
             [
@@ -158,7 +183,7 @@ def create_batch_response_object(
 
 
 def create_batch_response_handler(
-    api_responses: list[dict | list | Response],
+    api_responses: list[dict | list | Response | None],
 ) -> Callable[[Any], tuple[Response, bytes]]:
     """Create a fake http2lib response handler that supports generating batch responses.
 
@@ -181,20 +206,13 @@ def create_batch_response_handler(
     return _handler
 
 
-@pytest.fixture(name="response_handler")
-def mock_response_handler(api_responses: list[dict | list]) -> list:
-    """Create a mock http2lib response handler."""
-    return [create_response_object(api_response) for api_response in api_responses]
-
-
 @pytest.fixture(autouse=True)
-def mock_http_response(response_handler: list | Callable) -> Mock:
-    """Fixture to fake out http2lib responses."""
-
-    with patch("httplib2.Http.request", side_effect=response_handler) as mock_response:
-        yield mock_response
+def setup_http_response(mock_http_response: Mock) -> None:
+    """Fixture to load the http response mock."""
+    return
 
 
+@pytest.mark.parametrize("timezone", ["America/Regina", "UTC", "Asia/Tokyo"])
 @pytest.mark.parametrize(
     "api_responses",
     [
@@ -207,12 +225,14 @@ def mock_http_response(response_handler: list | Callable) -> Mock:
                         "title": "Task 1",
                         "status": "needsAction",
                         "position": "0000000000000001",
+                        "due": "2023-11-18T00:00:00Z",
                     },
                     {
                         "id": "task-2",
                         "title": "Task 2",
                         "status": "completed",
                         "position": "0000000000000002",
+                        "notes": "long description",
                     },
                 ],
             },
@@ -225,8 +245,10 @@ async def test_get_items(
     integration_setup: Callable[[], Awaitable[bool]],
     hass_ws_client: WebSocketGenerator,
     ws_get_items: Callable[[], Awaitable[dict[str, str]]],
+    timezone: str,
 ) -> None:
     """Test getting todo list items."""
+    await hass.config.async_set_time_zone(timezone)
 
     assert await integration_setup()
 
@@ -238,11 +260,13 @@ async def test_get_items(
             "uid": "task-1",
             "summary": "Task 1",
             "status": "needs_action",
+            "due": "2023-11-18",
         },
         {
             "uid": "task-2",
             "summary": "Task 2",
             "status": "completed",
+            "description": "long description",
         },
     ]
 
@@ -250,29 +274,6 @@ async def test_get_items(
     state = hass.states.get("todo.my_tasks")
     assert state
     assert state.state == "1"
-
-
-@pytest.mark.parametrize(
-    "response_handler",
-    [
-        ([(Response({"status": HTTPStatus.INTERNAL_SERVER_ERROR}), b"")]),
-    ],
-)
-async def test_list_items_server_error(
-    hass: HomeAssistant,
-    setup_credentials: None,
-    integration_setup: Callable[[], Awaitable[bool]],
-    hass_ws_client: WebSocketGenerator,
-    ws_get_items: Callable[[], Awaitable[dict[str, str]]],
-) -> None:
-    """Test an error returned by the server when setting up the platform."""
-
-    assert await integration_setup()
-
-    await hass_ws_client(hass)
-
-    state = hass.states.get("todo.my_tasks")
-    assert state is None
 
 
 @pytest.mark.parametrize(
@@ -333,21 +334,20 @@ async def test_task_items_error_response(
 
 
 @pytest.mark.parametrize(
-    "api_responses",
+    ("api_responses", "item_data"),
     [
-        [
-            LIST_TASK_LIST_RESPONSE,
-            LIST_TASKS_RESPONSE,
-            EMPTY_RESPONSE,  # create
-            LIST_TASKS_RESPONSE,  # refresh after delete
-        ]
+        (CREATE_API_RESPONSES, {}),
+        (CREATE_API_RESPONSES, {ATTR_DUE_DATE: "2023-11-18"}),
+        (CREATE_API_RESPONSES, {ATTR_DESCRIPTION: "6-pack"}),
     ],
+    ids=["summary", "due", "description"],
 )
 async def test_create_todo_list_item(
     hass: HomeAssistant,
     setup_credentials: None,
     integration_setup: Callable[[], Awaitable[bool]],
     mock_http_response: Mock,
+    item_data: dict[str, Any],
     snapshot: SnapshotAssertion,
 ) -> None:
     """Test for creating a To-do Item."""
@@ -360,9 +360,9 @@ async def test_create_todo_list_item(
 
     await hass.services.async_call(
         TODO_DOMAIN,
-        "add_item",
-        {"item": "Soda"},
-        target={"entity_id": "todo.my_tasks"},
+        TodoServices.ADD_ITEM,
+        {ATTR_ITEM: "Soda", **item_data},
+        target={ATTR_ENTITY_ID: "todo.my_tasks"},
         blocking=True,
     )
     assert len(mock_http_response.call_args_list) == 4
@@ -400,24 +400,14 @@ async def test_create_todo_list_item_error(
     with pytest.raises(HomeAssistantError, match="Invalid task ID"):
         await hass.services.async_call(
             TODO_DOMAIN,
-            "add_item",
-            {"item": "Soda"},
-            target={"entity_id": "todo.my_tasks"},
+            TodoServices.ADD_ITEM,
+            {ATTR_ITEM: "Soda"},
+            target={ATTR_ENTITY_ID: "todo.my_tasks"},
             blocking=True,
         )
 
 
-@pytest.mark.parametrize(
-    "api_responses",
-    [
-        [
-            LIST_TASK_LIST_RESPONSE,
-            LIST_TASKS_RESPONSE_WATER,
-            EMPTY_RESPONSE,  # update
-            LIST_TASKS_RESPONSE,  # refresh after update
-        ]
-    ],
-)
+@pytest.mark.parametrize("api_responses", [UPDATE_API_RESPONSES])
 async def test_update_todo_list_item(
     hass: HomeAssistant,
     setup_credentials: None,
@@ -435,9 +425,42 @@ async def test_update_todo_list_item(
 
     await hass.services.async_call(
         TODO_DOMAIN,
-        "update_item",
-        {"item": "some-task-id", "rename": "Soda", "status": "completed"},
-        target={"entity_id": "todo.my_tasks"},
+        TodoServices.UPDATE_ITEM,
+        {ATTR_ITEM: "some-task-id", ATTR_RENAME: "Soda", ATTR_STATUS: "completed"},
+        target={ATTR_ENTITY_ID: "todo.my_tasks"},
+        blocking=True,
+    )
+    assert len(mock_http_response.call_args_list) == 4
+    call = mock_http_response.call_args_list[2]
+    assert call
+    assert call.args == snapshot
+    assert call.kwargs.get("body") == snapshot
+
+
+@pytest.mark.parametrize("timezone", ["America/Regina", "UTC", "Asia/Tokyo"])
+@pytest.mark.parametrize("api_responses", [UPDATE_API_RESPONSES])
+async def test_update_due_date(
+    hass: HomeAssistant,
+    setup_credentials: None,
+    integration_setup: Callable[[], Awaitable[bool]],
+    mock_http_response: Any,
+    snapshot: SnapshotAssertion,
+    timezone: str,
+) -> None:
+    """Test for updating the due date of a To-do item and timezone."""
+    await hass.config.async_set_time_zone(timezone)
+
+    assert await integration_setup()
+
+    state = hass.states.get("todo.my_tasks")
+    assert state
+    assert state.state == "1"
+
+    await hass.services.async_call(
+        TODO_DOMAIN,
+        TodoServices.UPDATE_ITEM,
+        {ATTR_ITEM: "some-task-id", ATTR_DUE_DATE: "2024-12-5"},
+        target={ATTR_ENTITY_ID: "todo.my_tasks"},
         blocking=True,
     )
     assert len(mock_http_response.call_args_list) == 4
@@ -475,29 +498,38 @@ async def test_update_todo_list_item_error(
     with pytest.raises(HomeAssistantError, match="Invalid task ID"):
         await hass.services.async_call(
             TODO_DOMAIN,
-            "update_item",
-            {"item": "some-task-id", "rename": "Soda", "status": "completed"},
-            target={"entity_id": "todo.my_tasks"},
+            TodoServices.UPDATE_ITEM,
+            {ATTR_ITEM: "some-task-id", ATTR_RENAME: "Soda", ATTR_STATUS: "completed"},
+            target={ATTR_ENTITY_ID: "todo.my_tasks"},
             blocking=True,
         )
 
 
 @pytest.mark.parametrize(
-    "api_responses",
+    ("api_responses", "item_data"),
     [
-        [
-            LIST_TASK_LIST_RESPONSE,
-            LIST_TASKS_RESPONSE_WATER,
-            EMPTY_RESPONSE,  # update
-            LIST_TASKS_RESPONSE,  # refresh after update
-        ]
+        (UPDATE_API_RESPONSES, {ATTR_RENAME: "Soda"}),
+        (UPDATE_API_RESPONSES, {ATTR_DUE_DATE: "2023-11-18"}),
+        (UPDATE_API_RESPONSES, {ATTR_DUE_DATE: None}),
+        (UPDATE_API_RESPONSES, {ATTR_DESCRIPTION: "At least one gallon"}),
+        (UPDATE_API_RESPONSES, {ATTR_DESCRIPTION: ""}),
+        (UPDATE_API_RESPONSES, {ATTR_DESCRIPTION: None}),
     ],
+    ids=(
+        "rename",
+        "due_date",
+        "clear_due_date",
+        "description",
+        "empty_description",
+        "clear_description",
+    ),
 )
-async def test_partial_update_title(
+async def test_partial_update(
     hass: HomeAssistant,
     setup_credentials: None,
     integration_setup: Callable[[], Awaitable[bool]],
     mock_http_response: Any,
+    item_data: dict[str, Any],
     snapshot: SnapshotAssertion,
 ) -> None:
     """Test for partial update with title only."""
@@ -510,9 +542,9 @@ async def test_partial_update_title(
 
     await hass.services.async_call(
         TODO_DOMAIN,
-        "update_item",
-        {"item": "some-task-id", "rename": "Soda"},
-        target={"entity_id": "todo.my_tasks"},
+        TodoServices.UPDATE_ITEM,
+        {ATTR_ITEM: "some-task-id", **item_data},
+        target={ATTR_ENTITY_ID: "todo.my_tasks"},
         blocking=True,
     )
     assert len(mock_http_response.call_args_list) == 4
@@ -522,17 +554,7 @@ async def test_partial_update_title(
     assert call.kwargs.get("body") == snapshot
 
 
-@pytest.mark.parametrize(
-    "api_responses",
-    [
-        [
-            LIST_TASK_LIST_RESPONSE,
-            LIST_TASKS_RESPONSE_WATER,
-            EMPTY_RESPONSE,  # update
-            LIST_TASKS_RESPONSE,  # refresh after update
-        ]
-    ],
-)
+@pytest.mark.parametrize("api_responses", [UPDATE_API_RESPONSES])
 async def test_partial_update_status(
     hass: HomeAssistant,
     setup_credentials: None,
@@ -550,9 +572,9 @@ async def test_partial_update_status(
 
     await hass.services.async_call(
         TODO_DOMAIN,
-        "update_item",
-        {"item": "some-task-id", "status": "needs_action"},
-        target={"entity_id": "todo.my_tasks"},
+        TodoServices.UPDATE_ITEM,
+        {ATTR_ITEM: "some-task-id", ATTR_STATUS: "needs_action"},
+        target={ATTR_ENTITY_ID: "todo.my_tasks"},
         blocking=True,
     )
     assert len(mock_http_response.call_args_list) == 4
@@ -570,11 +592,11 @@ async def test_partial_update_status(
                 [
                     LIST_TASK_LIST_RESPONSE,
                     LIST_TASKS_RESPONSE_MULTIPLE,
-                    [EMPTY_RESPONSE, EMPTY_RESPONSE, EMPTY_RESPONSE],  # Delete batch
+                    [None, None, None],  # Delete batch empty responses
                     LIST_TASKS_RESPONSE,  # refresh after delete
                 ]
             )
-        )
+        ),
     ],
 )
 async def test_delete_todo_list_item(
@@ -594,9 +616,9 @@ async def test_delete_todo_list_item(
 
     await hass.services.async_call(
         TODO_DOMAIN,
-        "remove_item",
-        {"item": ["some-task-id-1", "some-task-id-2", "some-task-id-3"]},
-        target={"entity_id": "todo.my_tasks"},
+        TodoServices.REMOVE_ITEM,
+        {ATTR_ITEM: ["some-task-id-1", "some-task-id-2", "some-task-id-3"]},
+        target={ATTR_ENTITY_ID: "todo.my_tasks"},
         blocking=True,
     )
     assert len(mock_http_response.call_args_list) == 4
@@ -642,9 +664,9 @@ async def test_delete_partial_failure(
     with pytest.raises(HomeAssistantError, match="Invalid task ID"):
         await hass.services.async_call(
             TODO_DOMAIN,
-            "remove_item",
-            {"item": ["some-task-id-1", "some-task-id-2", "some-task-id-3"]},
-            target={"entity_id": "todo.my_tasks"},
+            TodoServices.REMOVE_ITEM,
+            {ATTR_ITEM: ["some-task-id-1", "some-task-id-2", "some-task-id-3"]},
+            target={ATTR_ENTITY_ID: "todo.my_tasks"},
             blocking=True,
         )
 
@@ -683,9 +705,9 @@ async def test_delete_invalid_json_response(
     with pytest.raises(HomeAssistantError, match="unexpected response"):
         await hass.services.async_call(
             TODO_DOMAIN,
-            "remove_item",
-            {"item": ["some-task-id-1"]},
-            target={"entity_id": "todo.my_tasks"},
+            TodoServices.REMOVE_ITEM,
+            {ATTR_ITEM: ["some-task-id-1"]},
+            target={ATTR_ENTITY_ID: "todo.my_tasks"},
             blocking=True,
         )
 
@@ -722,9 +744,9 @@ async def test_delete_server_error(
     with pytest.raises(HomeAssistantError, match="responded with error"):
         await hass.services.async_call(
             TODO_DOMAIN,
-            "remove_item",
-            {"item": ["some-task-id-1"]},
-            target={"entity_id": "todo.my_tasks"},
+            TodoServices.REMOVE_ITEM,
+            {ATTR_ITEM: ["some-task-id-1"]},
+            target={ATTR_ENTITY_ID: "todo.my_tasks"},
             blocking=True,
         )
 
@@ -796,3 +818,137 @@ async def test_parent_child_ordering(
 
     items = await ws_get_items()
     assert items == snapshot
+
+
+@pytest.mark.parametrize(
+    "api_responses",
+    [
+        [
+            LIST_TASK_LIST_RESPONSE,
+            LIST_TASKS_RESPONSE_MULTIPLE,
+            EMPTY_RESPONSE,  # move
+            LIST_TASKS_RESPONSE_REORDER,  # refresh after move
+        ]
+    ],
+)
+async def test_move_todo_item(
+    hass: HomeAssistant,
+    setup_credentials: None,
+    integration_setup: Callable[[], Awaitable[bool]],
+    ws_get_items: Callable[[], Awaitable[dict[str, str]]],
+    hass_ws_client: WebSocketGenerator,
+    mock_http_response: Any,
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Test for re-ordering a To-do Item."""
+
+    assert await integration_setup()
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == "3"
+
+    items = await ws_get_items()
+    assert items == snapshot
+
+    # Move to second in the list
+    client = await hass_ws_client()
+    data = {
+        "id": id,
+        "type": "todo/item/move",
+        "entity_id": ENTITY_ID,
+        "uid": "some-task-id-3",
+        "previous_uid": "some-task-id-1",
+    }
+    await client.send_json_auto_id(data)
+    resp = await client.receive_json()
+    assert resp.get("success")
+
+    assert len(mock_http_response.call_args_list) == 4
+    call = mock_http_response.call_args_list[2]
+    assert call
+    assert call.args == snapshot
+    assert call.kwargs.get("body") == snapshot
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == "3"
+
+    items = await ws_get_items()
+    assert items == snapshot
+
+
+@pytest.mark.parametrize(
+    "api_responses",
+    [
+        [
+            LIST_TASK_LIST_RESPONSE,
+            LIST_TASKS_RESPONSE_WATER,
+            EMPTY_RESPONSE,  # update
+            # refresh after update
+            {
+                "items": [
+                    {
+                        "id": "some-task-id",
+                        "title": "Milk",
+                        "status": "needsAction",
+                        "position": "0000000000000001",
+                    },
+                ],
+            },
+        ]
+    ],
+)
+async def test_susbcribe(
+    hass: HomeAssistant,
+    setup_credentials: None,
+    integration_setup: Callable[[], Awaitable[bool]],
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test subscribing to item updates."""
+
+    assert await integration_setup()
+
+    # Subscribe and get the initial list
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": "todo/item/subscribe",
+            "entity_id": "todo.my_tasks",
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"] is None
+    subscription_id = msg["id"]
+
+    msg = await client.receive_json()
+    assert msg["id"] == subscription_id
+    assert msg["type"] == "event"
+    items = msg["event"].get("items")
+    assert items
+    assert len(items) == 1
+    assert items[0]["summary"] == "Water"
+    assert items[0]["status"] == "needs_action"
+    uid = items[0]["uid"]
+    assert uid
+
+    # Rename item
+    await hass.services.async_call(
+        TODO_DOMAIN,
+        TodoServices.UPDATE_ITEM,
+        {ATTR_ITEM: uid, ATTR_RENAME: "Milk"},
+        target={ATTR_ENTITY_ID: "todo.my_tasks"},
+        blocking=True,
+    )
+
+    # Verify update is published
+    msg = await client.receive_json()
+    assert msg["id"] == subscription_id
+    assert msg["type"] == "event"
+    items = msg["event"].get("items")
+    assert items
+    assert len(items) == 1
+    assert items[0]["summary"] == "Milk"
+    assert items[0]["status"] == "needs_action"
+    assert "uid" in items[0]

@@ -1,4 +1,5 @@
 """Definition of Picnic shopping cart."""
+
 from __future__ import annotations
 
 import logging
@@ -12,6 +13,7 @@ from homeassistant.components.todo import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -31,20 +33,18 @@ async def async_setup_entry(
     """Set up the Picnic shopping cart todo platform config entry."""
     picnic_coordinator = hass.data[DOMAIN][config_entry.entry_id][CONF_COORDINATOR]
 
-    async_add_entities([PicnicCart(hass, picnic_coordinator, config_entry)])
+    async_add_entities([PicnicCart(picnic_coordinator, config_entry)])
 
 
 class PicnicCart(TodoListEntity, CoordinatorEntity[PicnicUpdateCoordinator]):
     """A Picnic Shopping Cart TodoListEntity."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:cart"
     _attr_supported_features = TodoListEntityFeature.CREATE_TODO_ITEM
     _attr_translation_key = "shopping_cart"
 
     def __init__(
         self,
-        hass: HomeAssistant,
         coordinator: PicnicUpdateCoordinator,
         config_entry: ConfigEntry,
     ) -> None:
@@ -56,7 +56,6 @@ class PicnicCart(TodoListEntity, CoordinatorEntity[PicnicUpdateCoordinator]):
             manufacturer="Picnic",
             model=config_entry.unique_id,
         )
-        self.hass = hass
         self._attr_unique_id = f"{config_entry.unique_id}-cart"
 
     @property
@@ -67,18 +66,15 @@ class PicnicCart(TodoListEntity, CoordinatorEntity[PicnicUpdateCoordinator]):
 
         _LOGGER.debug(self.coordinator.data["cart_data"]["items"])
 
-        items = []
-        for item in self.coordinator.data["cart_data"]["items"]:
-            for article in item["items"]:
-                items.append(
-                    TodoItem(
-                        summary=f"{article['name']} ({article['unit_quantity']})",
-                        uid=f"{item['id']}-{article['id']}",
-                        status=TodoItemStatus.NEEDS_ACTION,  # We set 'NEEDS_ACTION' so they count as state
-                    )
-                )
-
-        return items
+        return [
+            TodoItem(
+                summary=f"{article['name']} ({article['unit_quantity']})",
+                uid=f"{item['id']}-{article['id']}",
+                status=TodoItemStatus.NEEDS_ACTION,  # We set 'NEEDS_ACTION' so they count as state
+            )
+            for item in self.coordinator.data["cart_data"]["items"]
+            for article in item["items"]
+        ]
 
     async def async_create_todo_item(self, item: TodoItem) -> None:
         """Add item to shopping cart."""
@@ -87,7 +83,7 @@ class PicnicCart(TodoListEntity, CoordinatorEntity[PicnicUpdateCoordinator]):
         )
 
         if not product_id:
-            raise ValueError("No product found or no product ID given")
+            raise ServiceValidationError("No product found or no product ID given")
 
         await self.hass.async_add_executor_job(
             self.coordinator.picnic_api_client.add_product, product_id, 1

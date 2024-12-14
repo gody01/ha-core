@@ -1,4 +1,5 @@
 """Pyaehw4a1 platform to control of Hisense AEH-W4A1 Climate Devices."""
+
 from __future__ import annotations
 
 import logging
@@ -144,6 +145,8 @@ class ClimateAehW4a1(ClimateEntity):
         | ClimateEntityFeature.FAN_MODE
         | ClimateEntityFeature.SWING_MODE
         | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.TURN_OFF
+        | ClimateEntityFeature.TURN_ON
     )
     _attr_fan_modes = FAN_MODES
     _attr_swing_modes = SWING_MODES

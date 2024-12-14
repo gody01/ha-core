@@ -1,4 +1,5 @@
 """Queries for the recorder."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -12,6 +13,7 @@ from .db_schema import (
     EventData,
     Events,
     EventTypes,
+    MigrationChanges,
     RecorderRuns,
     StateAttributes,
     States,
@@ -592,7 +594,7 @@ def delete_statistics_short_term_rows(
 def delete_event_rows(
     event_ids: Iterable[int],
 ) -> StatementLambdaElement:
-    """Delete statistics_short_term rows."""
+    """Delete event rows."""
     return lambda_stmt(
         lambda: delete(Events)
         .where(Events.event_id.in_(event_ids))
@@ -606,7 +608,8 @@ def delete_recorder_runs_rows(
     """Delete recorder_runs rows."""
     return lambda_stmt(
         lambda: delete(RecorderRuns)
-        .filter(RecorderRuns.start < purge_before)
+        .filter(RecorderRuns.end.is_not(None))
+        .filter(RecorderRuns.end < purge_before)
         .filter(RecorderRuns.run_id != current_run_id)
         .execution_options(synchronize_session=False)
     )
@@ -631,6 +634,15 @@ def find_states_to_purge(
         lambda: select(States.state_id, States.attributes_id)
         .filter(States.last_updated_ts < purge_before)
         .limit(max_bind_vars)
+    )
+
+
+def find_oldest_state() -> StatementLambdaElement:
+    """Find the last_updated_ts of the oldest state."""
+    return lambda_stmt(
+        lambda: select(States.last_updated_ts).where(
+            States.state_id.in_(select(func.min(States.state_id)))
+        )
     )
 
 
@@ -761,6 +773,13 @@ def batch_cleanup_entity_ids() -> StatementLambdaElement:
     )
 
 
+def has_used_states_entity_ids() -> StatementLambdaElement:
+    """Check if there are used entity_ids in the states table."""
+    return lambda_stmt(
+        lambda: select(States.state_id).filter(States.entity_id.isnot(None)).limit(1)
+    )
+
+
 def has_used_states_event_ids() -> StatementLambdaElement:
     """Check if there are used event_ids in the states table."""
     return lambda_stmt(
@@ -808,6 +827,13 @@ def find_states_context_ids_to_migrate(max_bind_vars: int) -> StatementLambdaEle
         )
         .filter(States.context_id_bin.is_(None))
         .limit(max_bind_vars)
+    )
+
+
+def get_migration_changes() -> StatementLambdaElement:
+    """Query the database for previous migration changes."""
+    return lambda_stmt(
+        lambda: select(MigrationChanges.migration_id, MigrationChanges.version)
     )
 
 

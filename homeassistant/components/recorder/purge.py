@@ -1,4 +1,5 @@
 """Purge old data helper."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -10,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm.session import Session
 
-import homeassistant.util.dt as dt_util
+from homeassistant.util.collection import chunked_or_all
 
 from .db_schema import Events, States, StatesMeta
 from .models import DatabaseEngine
@@ -41,7 +42,7 @@ from .queries import (
     find_statistics_runs_to_purge,
 )
 from .repack import repack_database
-from .util import chunked_or_all, retryable_database_job, session_scope
+from .util import retryable_database_job, session_scope
 
 if TYPE_CHECKING:
     from . import Recorder
@@ -109,19 +110,21 @@ def purge_old_data(
             _LOGGER.debug("Purging hasn't fully completed yet")
             return False
 
-        if apply_filter and _purge_filtered_data(instance, session) is False:
+        if apply_filter and not _purge_filtered_data(instance, session):
             _LOGGER.debug("Cleanup filtered data hasn't fully completed yet")
             return False
 
         # This purge cycle is finished, clean up old event types and
         # recorder runs
-        if instance.event_type_manager.active:
-            _purge_old_event_types(instance, session)
+        _purge_old_event_types(instance, session)
 
         if instance.states_meta_manager.active:
             _purge_old_entity_ids(instance, session)
 
         _purge_old_recorder_runs(instance, session, purge_before)
+    with session_scope(session=instance.get_session(), read_only=True) as session:
+        instance.recorder_runs_manager.load_from_db(session)
+        instance.states_manager.load_from_db(session)
     if repack:
         repack_database(instance)
     return True
@@ -251,7 +254,7 @@ def _select_state_attributes_ids_to_purge(
     state_ids = set()
     attributes_ids = set()
     for state_id, attributes_id in session.execute(
-        find_states_to_purge(dt_util.utc_to_timestamp(purge_before), max_bind_vars)
+        find_states_to_purge(purge_before.timestamp(), max_bind_vars)
     ).all():
         state_ids.add(state_id)
         if attributes_id:
@@ -271,7 +274,7 @@ def _select_event_data_ids_to_purge(
     event_ids = set()
     data_ids = set()
     for event_id, data_id in session.execute(
-        find_events_to_purge(dt_util.utc_to_timestamp(purge_before), max_bind_vars)
+        find_events_to_purge(purge_before.timestamp(), max_bind_vars)
     ).all():
         event_ids.add(event_id)
         if data_id:
@@ -464,7 +467,7 @@ def _select_legacy_detached_state_and_attributes_and_data_ids_to_purge(
     """
     states = session.execute(
         find_legacy_detached_states_and_attributes_to_purge(
-            dt_util.utc_to_timestamp(purge_before), max_bind_vars
+            purge_before.timestamp(), max_bind_vars
         )
     ).all()
     _LOGGER.debug("Selected %s state ids to remove", len(states))
@@ -489,7 +492,7 @@ def _select_legacy_event_state_and_attributes_and_data_ids_to_purge(
     """
     events = session.execute(
         find_legacy_event_state_and_attributes_and_data_ids_to_purge(
-            dt_util.utc_to_timestamp(purge_before), max_bind_vars
+            purge_before.timestamp(), max_bind_vars
         )
     ).all()
     _LOGGER.debug("Selected %s event ids to remove", len(events))
@@ -630,7 +633,10 @@ def _purge_old_entity_ids(instance: Recorder, session: Session) -> None:
 
 
 def _purge_filtered_data(instance: Recorder, session: Session) -> bool:
-    """Remove filtered states and events that shouldn't be in the database."""
+    """Remove filtered states and events that shouldn't be in the database.
+
+    Returns true if all states and events are purged.
+    """
     _LOGGER.debug("Cleanup filtered data")
     database_engine = instance.database_engine
     assert database_engine is not None
@@ -638,21 +644,20 @@ def _purge_filtered_data(instance: Recorder, session: Session) -> bool:
 
     # Check if excluded entity_ids are in database
     entity_filter = instance.entity_filter
-    has_more_states_to_purge = False
+    has_more_to_purge = False
     excluded_metadata_ids: list[str] = [
         metadata_id
         for (metadata_id, entity_id) in session.query(
             StatesMeta.metadata_id, StatesMeta.entity_id
         ).all()
-        if not entity_filter(entity_id)
+        if entity_filter and not entity_filter(entity_id)
     ]
     if excluded_metadata_ids:
-        has_more_states_to_purge = _purge_filtered_states(
+        has_more_to_purge |= not _purge_filtered_states(
             instance, session, excluded_metadata_ids, database_engine, now_timestamp
         )
 
     # Check if excluded event_types are in database
-    has_more_events_to_purge = False
     if (
         event_type_to_event_type_ids := instance.event_type_manager.get_many(
             instance.exclude_event_types, session
@@ -664,12 +669,12 @@ def _purge_filtered_data(instance: Recorder, session: Session) -> bool:
             if event_type_id is not None
         ]
     ):
-        has_more_events_to_purge = _purge_filtered_events(
+        has_more_to_purge |= not _purge_filtered_events(
             instance, session, excluded_event_type_ids, now_timestamp
         )
 
     # Purge has completed if there are not more state or events to purge
-    return not (has_more_states_to_purge or has_more_events_to_purge)
+    return not has_more_to_purge
 
 
 def _purge_filtered_states(
@@ -695,7 +700,7 @@ def _purge_filtered_states(
     )
     if not to_purge:
         return True
-    state_ids, attributes_ids, event_ids = zip(*to_purge)
+    state_ids, attributes_ids, event_ids = zip(*to_purge, strict=False)
     filtered_event_ids = {id_ for id_ in event_ids if id_ is not None}
     _LOGGER.debug(
         "Selected %s state_ids to remove that should be filtered", len(state_ids)
@@ -736,7 +741,7 @@ def _purge_filtered_events(
     )
     if not to_purge:
         return True
-    event_ids, data_ids = zip(*to_purge)
+    event_ids, data_ids = zip(*to_purge, strict=False)
     event_ids_set = set(event_ids)
     _LOGGER.debug(
         "Selected %s event_ids to remove that should be filtered", len(event_ids_set)
@@ -764,7 +769,9 @@ def _purge_filtered_events(
 
 @retryable_database_job("purge_entity_data")
 def purge_entity_data(
-    instance: Recorder, entity_filter: Callable[[str], bool], purge_before: datetime
+    instance: Recorder,
+    entity_filter: Callable[[str], bool] | None,
+    purge_before: datetime,
 ) -> bool:
     """Purge states and events of specified entities."""
     database_engine = instance.database_engine
@@ -776,7 +783,7 @@ def purge_entity_data(
             for (metadata_id, entity_id) in session.query(
                 StatesMeta.metadata_id, StatesMeta.entity_id
             ).all()
-            if entity_filter(entity_id)
+            if entity_filter and entity_filter(entity_id)
         ]
         _LOGGER.debug("Purging entity data for %s", selected_metadata_ids)
         if not selected_metadata_ids:
@@ -793,5 +800,7 @@ def purge_entity_data(
         ):
             _LOGGER.debug("Purging entity data hasn't fully completed yet")
             return False
+
+        _purge_old_entity_ids(instance, session)
 
     return True

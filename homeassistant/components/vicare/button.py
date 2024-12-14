@@ -1,4 +1,5 @@
 """Viessmann ViCare button device."""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -20,15 +21,15 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import ViCareRequiredKeysMixinWithSet
-from .const import DOMAIN, VICARE_API, VICARE_DEVICE_CONFIG
+from .const import DEVICE_LIST, DOMAIN
 from .entity import ViCareEntity
-from .utils import is_supported
+from .types import ViCareDevice, ViCareRequiredKeysMixinWithSet
+from .utils import get_device_serial, is_supported
 
 _LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ViCareButtonEntityDescription(
     ButtonEntityDescription, ViCareRequiredKeysMixinWithSet
 ):
@@ -39,7 +40,6 @@ BUTTON_DESCRIPTIONS: tuple[ViCareButtonEntityDescription, ...] = (
     ViCareButtonEntityDescription(
         key="activate_onetimecharge",
         translation_key="activate_onetimecharge",
-        icon="mdi:shower-head",
         entity_category=EntityCategory.CONFIG,
         value_getter=lambda api: api.getOneTimeCharge(),
         value_setter=lambda api: api.activateOneTimeCharge(),
@@ -47,19 +47,22 @@ BUTTON_DESCRIPTIONS: tuple[ViCareButtonEntityDescription, ...] = (
 )
 
 
-def _build_entity(
-    vicare_api: PyViCareDevice,
-    device_config: PyViCareDeviceConfig,
-    entity_description: ViCareButtonEntityDescription,
-):
-    """Create a ViCare button entity."""
-    if is_supported(entity_description.key, entity_description, vicare_api):
-        return ViCareButton(
-            vicare_api,
-            device_config,
-            entity_description,
+def _build_entities(
+    device_list: list[ViCareDevice],
+) -> list[ViCareButton]:
+    """Create ViCare button entities for a device."""
+
+    return [
+        ViCareButton(
+            description,
+            get_device_serial(device.api),
+            device.config,
+            device.api,
         )
-    return None
+        for device in device_list
+        for description in BUTTON_DESCRIPTIONS
+        if is_supported(description.key, description, device.api)
+    ]
 
 
 async def async_setup_entry(
@@ -68,21 +71,14 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Create the ViCare button entities."""
-    api = hass.data[DOMAIN][config_entry.entry_id][VICARE_API]
+    device_list = hass.data[DOMAIN][config_entry.entry_id][DEVICE_LIST]
 
-    entities = []
-
-    for description in BUTTON_DESCRIPTIONS:
-        entity = await hass.async_add_executor_job(
-            _build_entity,
-            api,
-            hass.data[DOMAIN][config_entry.entry_id][VICARE_DEVICE_CONFIG],
-            description,
+    async_add_entities(
+        await hass.async_add_executor_job(
+            _build_entities,
+            device_list,
         )
-        if entity is not None:
-            entities.append(entity)
-
-    async_add_entities(entities)
+    )
 
 
 class ViCareButton(ViCareEntity, ButtonEntity):
@@ -92,12 +88,13 @@ class ViCareButton(ViCareEntity, ButtonEntity):
 
     def __init__(
         self,
-        api: PyViCareDevice,
-        device_config: PyViCareDeviceConfig,
         description: ViCareButtonEntityDescription,
+        device_serial: str | None,
+        device_config: PyViCareDeviceConfig,
+        device: PyViCareDevice,
     ) -> None:
         """Initialize the button."""
-        super().__init__(device_config, api, description.key)
+        super().__init__(description.key, device_serial, device_config, device)
         self.entity_description = description
 
     def press(self) -> None:

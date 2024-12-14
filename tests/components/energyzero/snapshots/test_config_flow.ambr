@@ -11,23 +11,31 @@
     'description_placeholders': None,
     'flow_id': <ANY>,
     'handler': 'energyzero',
+    'minor_version': 1,
     'options': dict({
     }),
     'result': ConfigEntrySnapshot({
       'data': dict({
       }),
       'disabled_by': None,
+      'discovery_keys': dict({
+      }),
       'domain': 'energyzero',
       'entry_id': <ANY>,
+      'minor_version': 1,
       'options': dict({
       }),
       'pref_disable_new_entities': False,
       'pref_disable_polling': False,
       'source': 'user',
+      'subentries': list([
+      ]),
       'title': 'EnergyZero',
       'unique_id': 'energyzero',
       'version': 1,
     }),
+    'subentries': tuple(
+    ),
     'title': 'EnergyZero',
     'type': <FlowResultType.CREATE_ENTRY: 'create_entry'>,
     'version': 1,
