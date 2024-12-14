@@ -1,4 +1,5 @@
 """VentoUpdateCoordinator class."""
+
 # from __future__ import annotations
 from datetime import timedelta
 import logging
@@ -14,7 +15,11 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 
 from .const import DOMAIN
 

@@ -11,8 +11,13 @@ from homeassistant.components.device_automation import (
 from homeassistant.const import CONF_DOMAIN
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers.typing import ConfigType, TemplateVarsType
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 
-from . import DOMAIN
+from .const import DOMAIN
 
 _ACTION_SCHEMA = toggle_entity.ACTION_SCHEMA.extend({vol.Required(CONF_DOMAIN): DOMAIN})
 
